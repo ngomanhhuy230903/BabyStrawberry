@@ -11,6 +11,7 @@ GameObject:
   - component: {fileID: 2567607654577333497}
   - component: {fileID: 2221288292914061603}
   - component: {fileID: 6242440399584177273}
+  - component: {fileID: -5334474877895329876}
   m_Layer: 0
   m_Name: Red Position
   m_TagString: Untagged
@@ -106,3 +107,22 @@ Animator:
   m_AllowConstantClipSamplingOptimization: 1
   m_KeepAnimatorStateOnDisable: 0
   m_WriteDefaultValuesOnDisable: 0
+--- !u!114 &-5334474877895329876
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 376263818096075947}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5d898f693e104c44eb384cb7d4241631, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  xIndex: 0
+  yIndex: 0
+  currentPosition: 0
+  targetPosition: 0
+  isMoving: 0
+  isMatched: 0
+  candyType: 0

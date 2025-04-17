@@ -4,15 +4,15 @@ using UnityEngine;
 
 public class Node : MonoBehaviour
 {
-    // Start is called before the first frame update
-    void Start()
+    //to determine wether the space can be filled with position or not.
+    public bool isUsable;
+
+    public GameObject position;
+
+    public Node(bool isUsable, GameObject position)
     {
-        
+        this.isUsable = isUsable;
+        this.position = position;
     }
 
-    // Update is called once per frame
-    void Update()
-    {
-        
-    }
 }
