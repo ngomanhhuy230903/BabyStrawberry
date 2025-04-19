@@ -13,8 +13,8 @@ public class PositionBoard : MonoBehaviour
     //get a reference to our position prefab
     public GameObject[] positionPrefab;
     //get a reference to the collection nodes positionBoard + GO
-    private Node[,] positionBoard;
-    public GameObject positionBoardbGO;
+    public Node[,] positionBoard;
+    public GameObject positionBoardGO;
     //layoutArray
     public ArrayLayout layoutArray;
     //public static of positionBoard
@@ -25,20 +25,22 @@ public class PositionBoard : MonoBehaviour
     }
     public void Start()
     {
-        
+        InitializeBoard();
     }
     public void InitializeBoard()
     {
         positionBoard = new Node[boardWidth, boardHeight];
         spaceingX = (float)(boardWidth - 1) / 2;
-        spaceingY = (float)(boardHeight - 1) / 2;
+        spaceingY = (float)((boardHeight - 1) / 2) + 1;
         for (int x = 0; x < boardHeight; x++)
         {
             for (int y = 0; y < boardWidth; y++)
             {
                 Vector2 position = new Vector2((x - spaceingX), (y - spaceingY));
                 int  randomIndex = Random.Range(0, positionPrefab.Length);
-                GameObject potion = Instantiate(positionPrefab[randomIndex], position, Quaternion.identity);
+                GameObject candy = Instantiate(positionPrefab[randomIndex], position, Quaternion.identity);
+                candy.GetComponent<Candy>().setIndicies(x, y);
+                positionBoard[x, y] = new Node(true, candy);
             }
         }
     }

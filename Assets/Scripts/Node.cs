@@ -14,5 +14,4 @@ public class Node : MonoBehaviour
         this.isUsable = isUsable;
         this.position = position;
     }
-
 }

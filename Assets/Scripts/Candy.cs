@@ -27,4 +27,9 @@ public class Candy : MonoBehaviour
         this.xIndex = xIndex;
         this.yIndex = yIndex;
     }
+    public void setIndicies(int xIndex, int yIndex)
+    {
+        this.xIndex = xIndex;
+        this.yIndex = yIndex;
+    }
 }
