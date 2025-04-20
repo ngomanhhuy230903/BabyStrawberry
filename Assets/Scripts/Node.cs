@@ -7,11 +7,11 @@ public class Node : MonoBehaviour
     //to determine wether the space can be filled with position or not.
     public bool isUsable;
 
-    public GameObject position;
+    public GameObject candy;
 
-    public Node(bool isUsable, GameObject position)
+    public Node(bool isUsable, GameObject candy)
     {
         this.isUsable = isUsable;
-        this.position = position;
+        this.candy = candy;
     }
 }
