@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using Unity.VisualScripting;
 using UnityEngine;
 
 public class PositionBoard : MonoBehaviour
@@ -49,20 +50,22 @@ public class PositionBoard : MonoBehaviour
                     candy.GetComponent<Candy>().setIndicies(x, y);
                     positionBoard[x, y] = new Node(true, candy);
                 }
-                
+
             }
         }
+        CheckBoard();
     }
     public bool CheckBoard()
     {
         Debug.Log("CheckBoard");
         bool hasMatch = false;
+        List<Candy> candyToRemove = new List<Candy>();
         for (int x = 0; x < boardWidth; x++)
         {
             for (int y = 0; y < boardHeight; y++)
             {
                 //check if the current position is usable
-                if(positionBoard[x, y].isUsable)
+                if (positionBoard[x, y].isUsable)
                 {
                     //then proceed to get candy class in node.
                     Candy candy = positionBoard[x, y].candy.GetComponent<Candy>();
@@ -71,11 +74,21 @@ public class PositionBoard : MonoBehaviour
                     if (!candy.isMatched)
                     {
                         MatchResult matchCandy = IsConnected(candy);
+                        if(matchCandy.connectionCandys.Count >= 3)
+                        {
+                            //comlext matching
+                            candyToRemove.AddRange(matchCandy.connectionCandys);
+                            foreach (Candy c in matchCandy.connectionCandys)
+                            {
+                                c.isMatched = true;
+                            }
+                            hasMatch = true;
+                        }
                     }
                 }
             }
         }
-        return false;
+        return hasMatch;
     }
     //IsConnected
     MatchResult IsConnected(Candy candy)
@@ -84,34 +97,84 @@ public class PositionBoard : MonoBehaviour
         CandyType candyType = candy.candyType;
         connectionCandys.Add(candy);
         //check right
-
+        CheckDirection(candy, Vector2Int.right, connectionCandys); //check right
         //check left
-
+        CheckDirection(candy, Vector2Int.left, connectionCandys); //check left
         //check we have a 3 match?(Horizontal match)
-
+        if(connectionCandys.Count == 3)
+        {
+            Debug.Log("I have a normal horizontal match,the color is match is : "+ connectionCandys[0].candyType);
+            return new MatchResult() { connectionCandys = connectionCandys, direction = MatchDirection.Horizontal };
+        }
         //checking for more than 3 match(long horizontal match)
-
+        else if (connectionCandys.Count > 3)
+        {
+            Debug.Log("I have a long horizontal match,the color is match is : " + connectionCandys[0].candyType);
+            return new MatchResult() { connectionCandys = connectionCandys, direction = MatchDirection.LongHorizontal };
+        }
         //clear out the connectionCandys list
-
+        connectionCandys.Clear();
         //read our initial candy
-
+        connectionCandys.Add(candy);
         //check up
-
+        CheckDirection(candy, Vector2Int.up, connectionCandys); //check up
         //check down
-
-        //check we have a 3 match?(Vertical match)
-
+        CheckDirection(candy, Vector2Int.down, connectionCandys); //check down
+                                                                  //check we have a 3 match?(Vertical match)
+        if (connectionCandys.Count == 3)
+        {
+            Debug.Log("I have a normal Vertical match,the color is match is : " + connectionCandys[0].candyType);
+            return new MatchResult() { connectionCandys = connectionCandys, direction = MatchDirection.Vertical };
+        }
         //checking for more than 3 match(long vertical match)
+        else if(connectionCandys.Count > 3)
+        {
+            Debug.Log("I have a long vertical match,the color is match is : " + connectionCandys[0].candyType);
+            return new MatchResult() { connectionCandys = connectionCandys, direction = MatchDirection.LongVertical };
+        }
+        else { 
+            return new MatchResult() { connectionCandys = null, direction = MatchDirection.None };
+        }
     }
 
-    //CheckDirection
+    void CheckDirection(Candy candy, Vector2Int direction, List<Candy> connectionCandys)
+    {
+        CandyType candyType = candy.candyType;
+        int x = candy.xIndex + direction.x;
+        int y = candy.yIndex + direction.y;
+        //check if we are within the bounds of the board
+        while (x >= 0 && x < boardWidth && y >= 0 && y < boardHeight)
+        {
+            //check if the current position is usable
+            if (positionBoard[x, y].isUsable)
+            {
+                //then proceed to get candy class in node.
+                Candy nextCandy = positionBoard[x, y].candy.GetComponent<Candy>();
+                //does our candyType match? it must also not be matched
+                if (!nextCandy.isMatched && nextCandy.candyType == candyType)
+                {
+                    connectionCandys.Add(nextCandy);
+                    x += direction.x;
+                    y += direction.y;
+                }
+                else
+                {
+                    break;
+                }
+            }
+            else
+            {
+                break;
+            }
+        }
+    }
 }
 
 
 public class MatchResult
 {
-    List<Candy> connectionCandys;
-    MatchDirection direction;
+    public List<Candy> connectionCandys;
+    public MatchDirection direction;
 }
 public enum MatchDirection
 {
