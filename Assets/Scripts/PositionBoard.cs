@@ -17,6 +17,10 @@ public class PositionBoard : MonoBehaviour
     //get a reference to the collection nodes positionBoard + GO
     public Node[,] positionBoard;
     public GameObject positionBoardGO;
+
+    public List<GameObject> positionToDestroy = new();
+    [SerializeField] private Candy selectedCandy;
+    [SerializeField] private bool isProcessingMove;
     //layoutArray
     public ArrayLayout arrayLayout;
     //public static of positionBoard
@@ -31,6 +35,7 @@ public class PositionBoard : MonoBehaviour
     }
     public void InitializeBoard()
     {
+        DestroyPosition();
         positionBoard = new Node[boardWidth, boardHeight];
         spaceingX = (float)((boardWidth - 1) / 2);
         spaceingY = (float)((boardHeight - 1) / 2) + 1;
@@ -46,16 +51,29 @@ public class PositionBoard : MonoBehaviour
                 else
                 {
                     int randomIndex = Random.Range(0, positionPrefab.Length);
+
                     GameObject candy = Instantiate(positionPrefab[randomIndex], position, Quaternion.identity);
                     candy.GetComponent<Candy>().setIndicies(x, y);
                     positionBoard[x, y] = new Node(true, candy);
+                    positionToDestroy.Add(candy);
                 }
 
             }
         }
         CheckBoard();
     }
-    public bool CheckBoard()
+    private void DestroyPosition()
+    {
+        if (positionToDestroy != null)
+        {
+            foreach (GameObject position in positionToDestroy)
+            {
+                Destroy(position);
+            }
+            positionToDestroy.Clear();
+        }
+    }
+        public bool CheckBoard()
     {
         Debug.Log("CheckBoard");
         bool hasMatch = false;
@@ -168,6 +186,54 @@ public class PositionBoard : MonoBehaviour
             }
         }
     }
+    #region Swapping candys
+    
+    //select candy
+    public void SelectCandy(Candy candy)
+    {
+        //if we don't have a candy currently selected,then set the candy i just clicked to my selected candy
+        if(selectedCandy == null)
+        {
+            selectedCandy = candy;
+            Debug.Log("Selected candy is: " + selectedCandy.candyType);
+        }
+        //if we select the same candy twice, then let's make selected candy null
+        else if(selectedCandy == candy)
+        {
+            selectedCandy = null;
+            Debug.Log("Selected candy is: " + selectedCandy);
+        }
+        //if selected candy is not null and is not  the current candy, then we can swap the two candys
+
+        //selected candy back to null
+        else if (selectedCandy != candy)
+        {
+            SwapCandy(selectedCandy, candy);
+            selectedCandy = null;
+        }
+    }
+    //swap candy-logic
+    private void SwapCandy(Candy selectedCandy, Candy candy)
+    {
+        //!IsAdjacent don't do anything
+        if(!IsAdjacent(selectedCandy, candy))
+        {
+            Debug.Log("Selected candy is not adjacent to the candy selected");
+            return;
+        }
+        //Do swap
+
+        //startCoroutine ProcessMatches.
+    }
+    //do swap
+
+    //IsAdjacent
+    private bool IsAdjacent(Candy selectedCandy, Candy candy)
+    {
+        return Mathf.Abs(selectedCandy.xIndex - candy.xIndex) + Mathf.Abs(selectedCandy.yIndex - candy.yIndex) == 1;
+    }
+    //ProcessMatched
+    #endregion
 }
 
 
