@@ -468,6 +468,9 @@ MonoBehaviour:
   - {fileID: 5937152101282392489, guid: d664bdbefd97fab46937f99a8aec6d59, type: 3}
   - {fileID: 5850356763111794963, guid: f4208941783e2f045b86a9167f930aab, type: 3}
   positionBoardGO: {fileID: 876688497}
+  positionToDestroy: []
+  selectedCandy: {fileID: 0}
+  isProcessingMove: 0
   arrayLayout:
     rows:
     - row: 000000000000

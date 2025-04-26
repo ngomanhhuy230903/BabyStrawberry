@@ -33,6 +33,28 @@ public class PositionBoard : MonoBehaviour
     {
         InitializeBoard();
     }
+    public void Update()
+    {
+        if(Input.GetMouseButtonDown(0))
+        {
+            Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
+            RaycastHit2D hit = Physics2D.Raycast(ray.origin, ray.direction);
+            if (hit.collider != null && hit.collider.gameObject.GetComponent<Candy>())
+            {
+                if (isProcessingMove)
+                {
+                    return;
+                }
+                Candy candy = hit.collider.gameObject.GetComponent<Candy>();
+                Debug.Log("I have click a candy it is " + candy.gameObject);
+                SelectCandy(candy);
+            }
+        }   
+        if (Input.GetKeyDown(KeyCode.Space))
+        {
+            InitializeBoard();
+        }
+    }
     public void InitializeBoard()
     {
         DestroyPosition();
@@ -213,24 +235,57 @@ public class PositionBoard : MonoBehaviour
         }
     }
     //swap candy-logic
-    private void SwapCandy(Candy selectedCandy, Candy candy)
+    private void SwapCandy(Candy selectedCandy, Candy targetCandy)
     {
         //!IsAdjacent don't do anything
-        if(!IsAdjacent(selectedCandy, candy))
+        if(!IsAdjacent(selectedCandy, targetCandy))
         {
             Debug.Log("Selected candy is not adjacent to the candy selected");
             return;
         }
         //Do swap
-
+        DoSwap(selectedCandy, targetCandy);
+        isProcessingMove = true;
         //startCoroutine ProcessMatches.
+        StartCoroutine(ProcessMatches(selectedCandy, targetCandy));
     }
     //do swap
-
-    //IsAdjacent
-    private bool IsAdjacent(Candy selectedCandy, Candy candy)
+    public void DoSwap(Candy selectedCandy, Candy targetCandy)
     {
-        return Mathf.Abs(selectedCandy.xIndex - candy.xIndex) + Mathf.Abs(selectedCandy.yIndex - candy.yIndex) == 1;
+        GameObject temp = positionBoard[selectedCandy.xIndex, selectedCandy.yIndex].candy;
+        positionBoard[selectedCandy.xIndex, selectedCandy.yIndex].candy = positionBoard[targetCandy.xIndex, targetCandy.yIndex].candy;
+        positionBoard[targetCandy.xIndex, targetCandy.yIndex].candy = temp;
+        //update the indicies of the candy
+        int tempXindex = selectedCandy.xIndex;
+        int tempYindex = selectedCandy.yIndex;
+        selectedCandy.xIndex = targetCandy.xIndex;
+        selectedCandy.yIndex = targetCandy.yIndex;
+        targetCandy.xIndex = tempXindex;
+        targetCandy.yIndex = tempYindex;
+        selectedCandy.MoveToTarget(positionBoard[selectedCandy.xIndex, selectedCandy.yIndex].candy.transform.position);
+        targetCandy.MoveToTarget(positionBoard[targetCandy.xIndex, targetCandy.yIndex].candy.transform.position);
+    }
+    private IEnumerator ProcessMatches(Candy selectedCandy, Candy targetCandy)
+    {
+        yield return new WaitForSeconds(0.2f);
+        bool hasMatch = CheckBoard();
+        if(hasMatch)
+        {
+            //do something
+            Debug.Log("I have a match");
+        }
+        else
+        {
+            //swap back
+            DoSwap(targetCandy, selectedCandy);
+            Debug.Log("I don't have a match");
+        }
+        isProcessingMove = false;
+    }
+    //IsAdjacent
+    private bool IsAdjacent(Candy selectedCandy, Candy targetCandy)
+    {
+        return Mathf.Abs(selectedCandy.xIndex - targetCandy.xIndex) + Mathf.Abs(selectedCandy.yIndex - targetCandy.yIndex) == 1;
     }
     //ProcessMatched
     #endregion

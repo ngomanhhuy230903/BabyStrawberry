@@ -33,6 +33,28 @@ public class Candy : MonoBehaviour
         this.yIndex = yIndex;
     }
     //MoveToTarget
-
+    public void MoveToTarget(Vector2 targetPosition)
+    {
+        if (isMoving) return;
+        isMoving = true;
+        StartCoroutine(MoveToCoroutine(targetPosition));
+    }
     //MoveToCoroutine
+    private IEnumerator MoveToCoroutine(Vector2 targetPosition)
+    {
+        isMoving = true;
+        float duration = 0.2f;
+        Vector2 startPosition = transform.position;
+        float time = 0;
+        while (time < duration)
+        {
+            float t = time / duration;
+            transform.position = Vector2.Lerp(startPosition, targetPosition, t);
+            time += Time.deltaTime;
+            yield return null;
+        }
+        transform.position = targetPosition;
+
+        isMoving = false;
+    }
 }
