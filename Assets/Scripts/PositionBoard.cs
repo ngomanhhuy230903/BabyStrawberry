@@ -1,4 +1,4 @@
-using System.Collections;
+﻿using System.Collections;
 using System.Collections.Generic;
 using Unity.VisualScripting;
 using UnityEngine;
@@ -35,24 +35,36 @@ public class PositionBoard : MonoBehaviour
     }
     public void Update()
     {
-        if(Input.GetMouseButtonDown(0))
+        if (Input.GetMouseButtonDown(0))
         {
             Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
-            RaycastHit2D hit = Physics2D.Raycast(ray.origin, ray.direction);
-            if (hit.collider != null && hit.collider.gameObject.GetComponent<Candy>())
+            RaycastHit hit; // Sử dụng RaycastHit thay vì RaycastHit2D
+
+            // Sử dụng Physics.Raycast thay vì Physics2D.Raycast
+            if (Physics.Raycast(ray, out hit))
             {
-                if (isProcessingMove)
+                if (hit.collider != null)
                 {
-                    return;
+                    Candy candy = hit.collider.gameObject.GetComponent<Candy>();
+                    if (candy != null && !isProcessingMove)
+                    {
+                        Debug.Log($"Click candy at position [{candy.xIndex},{candy.yIndex}], type: {candy.candyType}");
+                        SelectCandy(candy);
+                    }
                 }
-                Candy candy = hit.collider.gameObject.GetComponent<Candy>();
-                Debug.Log("I have click a candy it is " + candy.gameObject);
-                SelectCandy(candy);
             }
-        }   
+        }
         if (Input.GetKeyDown(KeyCode.Space))
         {
             InitializeBoard();
+        }
+        // Thêm vào Update()
+        if (Input.GetKeyDown(KeyCode.S))
+        {
+            if (selectedCandy != null)
+                Debug.Log($"Current selectedCandy: {selectedCandy.candyType} at [{selectedCandy.xIndex},{selectedCandy.yIndex}]");
+            else
+                Debug.Log("No candy selected");
         }
     }
     public void InitializeBoard()
@@ -65,7 +77,8 @@ public class PositionBoard : MonoBehaviour
         {
             for (int x = 0; x < boardWidth; x++)
             {
-                Vector2 position = new Vector2((x - spaceingX) * spacingScale, (y - spaceingY) * spacingScale);
+                // Thêm tọa độ Z = 0 rõ ràng
+                Vector3 position = new Vector3((x - spaceingX) * spacingScale, (y - spaceingY) * spacingScale, 0);
                 if (arrayLayout.rows[y].row[x])
                 {
                     positionBoard[x, y] = new Node(false, null);
@@ -79,7 +92,6 @@ public class PositionBoard : MonoBehaviour
                     positionBoard[x, y] = new Node(true, candy);
                     positionToDestroy.Add(candy);
                 }
-
             }
         }
         CheckBoard();
@@ -95,38 +107,51 @@ public class PositionBoard : MonoBehaviour
             positionToDestroy.Clear();
         }
     }
-        public bool CheckBoard()
+    public bool CheckBoard()
     {
         Debug.Log("CheckBoard");
         bool hasMatch = false;
         List<Candy> candyToRemove = new List<Candy>();
-        for (int x = 0; x < boardWidth; x++)
+        try
         {
-            for (int y = 0; y < boardHeight; y++)
+            for (int x = 0; x < boardWidth; x++)
             {
-                //check if the current position is usable
-                if (positionBoard[x, y].isUsable)
+                for (int y = 0; y < boardHeight; y++)
                 {
-                    //then proceed to get candy class in node.
-                    Candy candy = positionBoard[x, y].candy.GetComponent<Candy>();
-
-                    //ensure its not matched
-                    if (!candy.isMatched)
+                    //check if the current position is usable
+                    if (positionBoard[x, y].isUsable && positionBoard[x, y].candy != null)
                     {
-                        MatchResult matchCandy = IsConnected(candy);
-                        if(matchCandy.connectionCandys.Count >= 3)
+                        //then proceed to get candy class in node.
+                        Candy candy = positionBoard[x, y].candy.GetComponent<Candy>();
+
+                        if (candy == null)
                         {
-                            //comlext matching
-                            candyToRemove.AddRange(matchCandy.connectionCandys);
-                            foreach (Candy c in matchCandy.connectionCandys)
+                            Debug.LogWarning($"Candy component not found at position [{x},{y}]");
+                            continue;
+                        }
+
+                        //ensure its not matched
+                        if (!candy.isMatched)
+                        {
+                            MatchResult matchCandy = IsConnected(candy);
+                            if (matchCandy != null && matchCandy.connectionCandys != null && matchCandy.connectionCandys.Count >= 3)
                             {
-                                c.isMatched = true;
+                                //comlext matching
+                                candyToRemove.AddRange(matchCandy.connectionCandys);
+                                foreach (Candy c in matchCandy.connectionCandys)
+                                {
+                                    c.isMatched = true;
+                                }
+                                hasMatch = true;
                             }
-                            hasMatch = true;
                         }
                     }
                 }
             }
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogError($"Error in CheckBoard: {e.Message}\nStackTrace: {e.StackTrace}");
         }
         return hasMatch;
     }
@@ -172,8 +197,10 @@ public class PositionBoard : MonoBehaviour
             Debug.Log("I have a long vertical match,the color is match is : " + connectionCandys[0].candyType);
             return new MatchResult() { connectionCandys = connectionCandys, direction = MatchDirection.LongVertical };
         }
-        else { 
-            return new MatchResult() { connectionCandys = null, direction = MatchDirection.None };
+        else
+        {
+            // Trả về một danh sách rỗng thay vì null
+            return new MatchResult() { connectionCandys = new List<Candy>(), direction = MatchDirection.None };
         }
     }
 
@@ -186,7 +213,7 @@ public class PositionBoard : MonoBehaviour
         while (x >= 0 && x < boardWidth && y >= 0 && y < boardHeight)
         {
             //check if the current position is usable
-            if (positionBoard[x, y].isUsable)
+            if (positionBoard[x, y].isUsable && positionBoard[x, y].candy != null)
             {
                 //then proceed to get candy class in node.
                 Candy nextCandy = positionBoard[x, y].candy.GetComponent<Candy>();
@@ -209,83 +236,182 @@ public class PositionBoard : MonoBehaviour
         }
     }
     #region Swapping candys
-    
+
     //select candy
     public void SelectCandy(Candy candy)
     {
-        //if we don't have a candy currently selected,then set the candy i just clicked to my selected candy
-        if(selectedCandy == null)
+        if (candy == null)
+        {
+            Debug.LogError("Cannot select null candy");
+            return;
+        }
+
+        Debug.Log($"SelectCandy called with candy type {candy.candyType} at [{candy.xIndex},{candy.yIndex}]");
+        Debug.Log($"Current selectedCandy: {(selectedCandy == null ? "null" : selectedCandy.candyType.ToString() + " at [" + selectedCandy.xIndex + "," + selectedCandy.yIndex + "]")}");
+
+        // Nếu đang xử lý, không cho chọn thêm
+        if (isProcessingMove)
+        {
+            Debug.Log("Still processing previous move");
+            return;
+        }
+
+        // Nếu chưa có kẹo nào được chọn trước đó
+        if (selectedCandy == null)
         {
             selectedCandy = candy;
-            Debug.Log("Selected candy is: " + selectedCandy.candyType);
+            selectedCandy.SetSelected(true); // Hiển thị visual feedback
+            Debug.Log($"First candy selected: {selectedCandy.candyType} at [{selectedCandy.xIndex},{selectedCandy.yIndex}]");
         }
-        //if we select the same candy twice, then let's make selected candy null
-        else if(selectedCandy == candy)
+        // Nếu chọn lại chính kẹo đó
+        else if (selectedCandy == candy)
         {
+            selectedCandy.SetSelected(false); // Hủy visual feedback
             selectedCandy = null;
-            Debug.Log("Selected candy is: " + selectedCandy);
+            Debug.Log("Deselected candy");
         }
-        //if selected candy is not null and is not  the current candy, then we can swap the two candys
+        // Nếu chọn kẹo khác (tiến hành swap)
+        else
+        {
+            Debug.Log($"Second candy selected: {candy.candyType} at [{candy.xIndex},{candy.yIndex}], attempting swap");
 
-        //selected candy back to null
-        else if (selectedCandy != candy)
-        {
-            SwapCandy(selectedCandy, candy);
+            // Lưu tham chiếu tạm thời để tránh vấn đề về tham chiếu
+            Candy firstCandy = selectedCandy;
+            Candy secondCandy = candy;
+
+            // Xóa trạng thái chọn
+            firstCandy.SetSelected(false);
             selectedCandy = null;
+
+            // Thử swap
+            SwapCandy(firstCandy, secondCandy);
         }
     }
     //swap candy-logic
     private void SwapCandy(Candy selectedCandy, Candy targetCandy)
     {
-        //!IsAdjacent don't do anything
-        if(!IsAdjacent(selectedCandy, targetCandy))
+        // In thông tin debug
+        Debug.Log($"Attempting to swap: {selectedCandy.candyType}[{selectedCandy.xIndex},{selectedCandy.yIndex}] with {targetCandy.candyType}[{targetCandy.xIndex},{targetCandy.yIndex}]");
+
+        // Kiểm tra kề nhau
+        if (!IsAdjacent(selectedCandy, targetCandy))
         {
-            Debug.Log("Selected candy is not adjacent to the candy selected");
+            Debug.LogWarning("Candies are not adjacent!");
             return;
         }
-        //Do swap
-        DoSwap(selectedCandy, targetCandy);
+
+        // Đánh dấu đang xử lý để tránh swap nhiều lần
         isProcessingMove = true;
-        //startCoroutine ProcessMatches.
+
+        // Gọi DoSwap để thực hiện swap
+        DoSwap(selectedCandy, targetCandy);
+
+        // Bắt đầu coroutine để xử lý kết quả của swap
         StartCoroutine(ProcessMatches(selectedCandy, targetCandy));
     }
     //do swap
     public void DoSwap(Candy selectedCandy, Candy targetCandy)
     {
-        GameObject temp = positionBoard[selectedCandy.xIndex, selectedCandy.yIndex].candy;
-        positionBoard[selectedCandy.xIndex, selectedCandy.yIndex].candy = positionBoard[targetCandy.xIndex, targetCandy.yIndex].candy;
-        positionBoard[targetCandy.xIndex, targetCandy.yIndex].candy = temp;
-        //update the indicies of the candy
-        int tempXindex = selectedCandy.xIndex;
-        int tempYindex = selectedCandy.yIndex;
-        selectedCandy.xIndex = targetCandy.xIndex;
-        selectedCandy.yIndex = targetCandy.yIndex;
-        targetCandy.xIndex = tempXindex;
-        targetCandy.yIndex = tempYindex;
-        selectedCandy.MoveToTarget(positionBoard[selectedCandy.xIndex, selectedCandy.yIndex].candy.transform.position);
-        targetCandy.MoveToTarget(positionBoard[targetCandy.xIndex, targetCandy.yIndex].candy.transform.position);
+        if (selectedCandy == null || targetCandy == null)
+        {
+            Debug.LogError("Cannot swap with null candy");
+            return;
+        }
+
+        // Lưu chỉ số ban đầu
+        int selectedX = selectedCandy.xIndex;
+        int selectedY = selectedCandy.yIndex;
+        int targetX = targetCandy.xIndex;
+        int targetY = targetCandy.yIndex;
+
+        Debug.Log($"DoSwap: Swapping [{selectedX},{selectedY}] with [{targetX},{targetY}]");
+
+        // Kiểm tra chỉ số có hợp lệ không
+        if (selectedX < 0 || selectedX >= boardWidth || selectedY < 0 || selectedY >= boardHeight ||
+            targetX < 0 || targetX >= boardWidth || targetY < 0 || targetY >= boardHeight)
+        {
+            Debug.LogError("Invalid indices for candy swap");
+            return;
+        }
+
+        // Lưu vị trí hiện tại của các viên kẹo
+        Vector3 selectedPos = selectedCandy.transform.position;
+        Vector3 targetPos = targetCandy.transform.position;
+
+        // Cập nhật mảng positionBoard
+        positionBoard[selectedX, selectedY].candy = targetCandy.gameObject;
+        positionBoard[targetX, targetY].candy = selectedCandy.gameObject;
+
+        // Cập nhật chỉ số của các viên kẹo
+        selectedCandy.setIndicies(targetX, targetY);
+        targetCandy.setIndicies(selectedX, selectedY);
+
+        // Di chuyển các viên kẹo đến vị trí mới
+        selectedCandy.MoveToTarget(targetPos);
+        targetCandy.MoveToTarget(selectedPos);
+
+        // Thêm visual feedback
+        selectedCandy.SetSelected(false);
     }
     private IEnumerator ProcessMatches(Candy selectedCandy, Candy targetCandy)
     {
-        yield return new WaitForSeconds(0.2f);
-        bool hasMatch = CheckBoard();
-        if(hasMatch)
+        Debug.Log("=== ProcessMatches START ===");
+
+        if (selectedCandy == null || targetCandy == null)
         {
-            //do something
-            Debug.Log("I have a match");
+            Debug.LogError("ProcessMatches received null candy");
+            isProcessingMove = false;
+            yield break;
+        }
+
+        // Chờ cho animation di chuyển hoàn thành
+        yield return new WaitForSeconds(0.3f);
+
+        bool hasMatch = false;
+
+        try
+        {
+            hasMatch = CheckBoard();
+            Debug.Log($"CheckBoard result: {hasMatch}");
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogError($"Error in CheckBoard: {e.Message}\n{e.StackTrace}");
+        }
+
+        if (hasMatch)
+        {
+            // Xử lý kết quả match ở đây
+            Debug.Log("Match found! Processing matches...");
+            // Thêm code xử lý các viên kẹo đã match
+
+            // Đợi một chút trước khi đánh dấu là đã hoàn thành
+            yield return new WaitForSeconds(0.5f);
         }
         else
         {
-            //swap back
-            DoSwap(targetCandy, selectedCandy);
-            Debug.Log("I don't have a match");
+            Debug.Log("No match found, swapping back");
+            // Swap ngược lại
+            DoSwap(selectedCandy, targetCandy);
+
+            // Đợi animation swap back hoàn thành
+            yield return new WaitForSeconds(0.3f);
         }
+
+        // Reset
+        selectedCandy = null;
+        Debug.Log("=== ProcessMatches END ===");
         isProcessingMove = false;
     }
     //IsAdjacent
     private bool IsAdjacent(Candy selectedCandy, Candy targetCandy)
     {
-        return Mathf.Abs(selectedCandy.xIndex - targetCandy.xIndex) + Mathf.Abs(selectedCandy.yIndex - targetCandy.yIndex) == 1;
+        bool adjacent = Mathf.Abs(selectedCandy.xIndex - targetCandy.xIndex) +
+                        Mathf.Abs(selectedCandy.yIndex - targetCandy.yIndex) == 1;
+
+        Debug.Log($"IsAdjacent check: [{selectedCandy.xIndex},{selectedCandy.yIndex}] to [{targetCandy.xIndex},{targetCandy.yIndex}] = {adjacent}");
+
+        return adjacent;
     }
     //ProcessMatched
     #endregion
@@ -294,7 +420,7 @@ public class PositionBoard : MonoBehaviour
 
 public class MatchResult
 {
-    public List<Candy> connectionCandys;
+    public List<Candy> connectionCandys = new List<Candy>();
     public MatchDirection direction;
 }
 public enum MatchDirection
