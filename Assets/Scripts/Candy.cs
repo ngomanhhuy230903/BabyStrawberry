@@ -20,32 +20,65 @@ public class Candy : MonoBehaviour
     [SerializeField] public bool isMatched;
     [SerializeField] public CandyType candyType;
 
-    private Vector3 originalScale;
     private SpriteRenderer spriteRenderer;
 
     void Awake()
     {
-        // Đảm bảo có collider
-        if (GetComponent<Collider>() == null)
+        if (gameObject == null)
         {
-            BoxCollider collider = gameObject.AddComponent<BoxCollider>();
+            Debug.LogError("GameObject is null in Candy.Awake");
+            return;
+        }
+        Debug.Log($"Candy {name} Awake start, GameObject: {gameObject.name}");
+
+        Collider collider = GetComponent<Collider>();
+        if (collider == null)
+        {
+            Debug.Log("Adding BoxCollider to Candy");
+            BoxCollider boxCollider = gameObject.AddComponent<BoxCollider>();
             spriteRenderer = GetComponent<SpriteRenderer>();
             if (spriteRenderer != null)
             {
-                collider.size = new Vector3(
-                    spriteRenderer.bounds.size.x,
-                    spriteRenderer.bounds.size.y,
-                    0.1f
-                );
+                Debug.Log($"SpriteRenderer found: {spriteRenderer.name}");
+                if (spriteRenderer.sprite != null)
+                {
+                    Debug.Log($"Sprite assigned: {spriteRenderer.sprite.name}");
+                    boxCollider.size = new Vector3(
+                        spriteRenderer.bounds.size.x,
+                        spriteRenderer.bounds.size.y,
+                        0.1f
+                    );
+                }
+                else
+                {
+                    Debug.LogWarning($"Candy {name} has SpriteRenderer but no sprite assigned.");
+                    boxCollider.size = new Vector3(1f, 1f, 0.1f);
+                }
+            }
+            else
+            {
+                Debug.LogWarning($"Candy {name} is missing SpriteRenderer during first check.");
+                boxCollider.size = new Vector3(1f, 1f, 0.1f);
             }
         }
 
         spriteRenderer = GetComponent<SpriteRenderer>();
-    }
-
-    void Start()
-    {
-        originalScale = transform.localScale;
+        if (spriteRenderer == null)
+        {
+            Debug.LogError($"Candy {name} is missing SpriteRenderer component after second check. GameObject: {gameObject.name}, Active: {gameObject.activeSelf}");
+        }
+        else
+        {
+            Debug.Log($"SpriteRenderer found after second check: {spriteRenderer.name}");
+            if (spriteRenderer.sprite == null)
+            {
+                Debug.LogError($"Candy {name} has SpriteRenderer but no sprite assigned after second check.");
+            }
+            else
+            {
+                Debug.Log($"Sprite assigned after second check: {spriteRenderer.sprite.name}");
+            }
+        }
     }
 
     public void Init(int xIndex, int yIndex, CandyType type)
@@ -93,29 +126,21 @@ public class Candy : MonoBehaviour
 
     public void SetSelected(bool selected)
     {
-        if (selected)
+        if (spriteRenderer != null)
         {
-            transform.localScale = originalScale * 1.2f;
-            // Có thể thêm hiệu ứng phát sáng nếu cần
-            if (spriteRenderer != null)
-            {
-                spriteRenderer.color = new Color(1f, 1f, 1f, 1f); // Highlight
-            }
+            spriteRenderer.color = selected ? new Color(1f, 1f, 1f, 1f) : Color.white; // Highlight hoặc trở về bình thường
         }
-        else
-        {
-            transform.localScale = originalScale;
-            if (spriteRenderer != null)
-            {
-                spriteRenderer.color = Color.white; // Trở về bình thường
-            }
-        }
+        Debug.Log($"Candy {candyType} at [{xIndex},{yIndex}] {(selected ? "selected" : "deselected")}");
     }
 
     void OnMouseDown()
     {
         Debug.Log($"Direct click on candy: Type={candyType}, Position=[{xIndex},{yIndex}]");
-        // Bạn có thể xử lý sự kiện click trực tiếp ở đây nếu muốn
+        // Gọi luôn SelectCandy để đồng bộ với logic swap
+        if (PositionBoard.instance != null && !PositionBoard.instance.isProcessingMove)
+        {
+            PositionBoard.instance.SelectCandy(this);
+        }
     }
 
     public bool ValidatePosition()
