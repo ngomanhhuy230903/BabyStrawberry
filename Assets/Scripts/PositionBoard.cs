@@ -37,20 +37,15 @@ public class PositionBoard : MonoBehaviour
     {
         if (Input.GetMouseButtonDown(0))
         {
-            Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
-            RaycastHit hit; // Sử dụng RaycastHit thay vì RaycastHit2D
-
-            // Sử dụng Physics.Raycast thay vì Physics2D.Raycast
-            if (Physics.Raycast(ray, out hit))
+            Vector2 mousePos = Camera.main.ScreenToWorldPoint(Input.mousePosition);
+            RaycastHit2D hit = Physics2D.Raycast(mousePos, Vector2.zero);
+            if (hit.collider != null)
             {
-                if (hit.collider != null)
+                Candy candy = hit.collider.gameObject.GetComponent<Candy>();
+                if (candy != null && !isProcessingMove)
                 {
-                    Candy candy = hit.collider.gameObject.GetComponent<Candy>();
-                    if (candy != null && !isProcessingMove)
-                    {
-                        Debug.Log($"Click candy at position [{candy.xIndex},{candy.yIndex}], type: {candy.candyType}");
-                        SelectCandy(candy);
-                    }
+                    Debug.Log($"Click candy at position [{candy.xIndex},{candy.yIndex}], type: {candy.candyType}");
+                    SelectCandy(candy);
                 }
             }
         }
@@ -58,7 +53,6 @@ public class PositionBoard : MonoBehaviour
         {
             InitializeBoard();
         }
-        // Thêm vào Update()
         if (Input.GetKeyDown(KeyCode.S))
         {
             if (selectedCandy != null)

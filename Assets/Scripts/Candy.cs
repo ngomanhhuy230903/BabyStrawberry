@@ -31,37 +31,33 @@ public class Candy : MonoBehaviour
         }
         Debug.Log($"Candy {name} Awake start, GameObject: {gameObject.name}");
 
-        Collider collider = GetComponent<Collider>();
-        if (collider == null)
+        // Kiểm tra xem có Collider2D (cho 2D) hay không
+        Collider2D collider2D = GetComponent<Collider2D>();
+        if (collider2D == null)
         {
-            Debug.Log("Adding BoxCollider to Candy");
-            BoxCollider boxCollider = gameObject.AddComponent<BoxCollider>();
+            Debug.Log("Adding BoxCollider2D to Candy");
+            BoxCollider2D boxCollider = gameObject.AddComponent<BoxCollider2D>();
             spriteRenderer = GetComponent<SpriteRenderer>();
-            if (spriteRenderer != null)
+            if (spriteRenderer != null && spriteRenderer.sprite != null)
             {
-                Debug.Log($"SpriteRenderer found: {spriteRenderer.name}");
-                if (spriteRenderer.sprite != null)
-                {
-                    Debug.Log($"Sprite assigned: {spriteRenderer.sprite.name}");
-                    boxCollider.size = new Vector3(
-                        spriteRenderer.bounds.size.x,
-                        spriteRenderer.bounds.size.y,
-                        0.1f
-                    );
-                }
-                else
-                {
-                    Debug.LogWarning($"Candy {name} has SpriteRenderer but no sprite assigned.");
-                    boxCollider.size = new Vector3(1f, 1f, 0.1f);
-                }
+                Debug.Log($"SpriteRenderer found: {spriteRenderer.name}, Sprite: {spriteRenderer.sprite.name}");
+                boxCollider.size = new Vector2(
+                    spriteRenderer.bounds.size.x,
+                    spriteRenderer.bounds.size.y
+                );
             }
             else
             {
-                Debug.LogWarning($"Candy {name} is missing SpriteRenderer during first check.");
-                boxCollider.size = new Vector3(1f, 1f, 0.1f);
+                Debug.LogWarning($"Candy {name} is missing SpriteRenderer or sprite, using default collider size.");
+                boxCollider.size = new Vector2(1f, 1f);
             }
         }
+        else
+        {
+            Debug.Log($"Candy {name} already has a Collider2D: {collider2D.GetType().Name}");
+        }
 
+        // Kiểm tra SpriteRenderer
         spriteRenderer = GetComponent<SpriteRenderer>();
         if (spriteRenderer == null)
         {
