@@ -190,9 +190,9 @@ public class PositionBoard : MonoBehaviour
                             MatchResult matchCandy = IsConnected(candy);
                             if (matchCandy != null && matchCandy.connectionCandys != null && matchCandy.connectionCandys.Count >= 3)
                             {
-                                //complex matching
-                                candyToRemove.AddRange(matchCandy.connectionCandys);
-                                foreach (Candy c in matchCandy.connectionCandys)
+                                MatchResult superMatchCandys = SuperMatch(matchCandy);
+                                candyToRemove.AddRange(superMatchCandys.connectionCandys);
+                                foreach (Candy c in superMatchCandys.connectionCandys)
                                 {
                                     c.isMatched = true;
                                 }
@@ -209,6 +209,49 @@ public class PositionBoard : MonoBehaviour
         }
         return hasMatch;
     }
+
+    private MatchResult SuperMatch(MatchResult matchCandy)
+    {
+        //if we have a horizontal or long horizontal match
+        if(matchCandy.direction == MatchDirection.Horizontal || matchCandy.direction == MatchDirection.LongHorizontal)
+        {        
+            foreach (Candy candy in matchCandy.connectionCandys)// loop through the positions in my match
+            {
+                List<Candy> extraConnectionCandys = new List<Candy>();        //create new list of candys "extra matches"
+                CheckDirection(candy, Vector2Int.up, extraConnectionCandys); //CheckDirection up
+                CheckDirection(candy, Vector2Int.down, extraConnectionCandys);  //CheckDirection down
+                if (extraConnectionCandys.Count >= 2)//do we have 2 or more extra match
+                {
+                    Debug.Log("I have a super horizontal match, the color is match is : " + matchCandy.connectionCandys[0].candyType);
+                    extraConnectionCandys.AddRange(matchCandy.connectionCandys);
+                    //we've made a super match - return a new matchresult of type super
+                    return new MatchResult() { connectionCandys = extraConnectionCandys, direction = MatchDirection.Super };
+                }
+             }
+            //return extra matches
+            return new MatchResult() { connectionCandys = matchCandy.connectionCandys, direction = matchCandy.direction };
+
+        }
+        //if we have a vertical or long vertical match
+        else if (matchCandy.direction == MatchDirection.Vertical || matchCandy.direction == MatchDirection.LongVertical)
+        {
+            foreach (Candy candy in matchCandy.connectionCandys)
+            {
+                List<Candy> extraConnectionCandys = new List<Candy>();
+                CheckDirection(candy, Vector2Int.right, extraConnectionCandys); //check right
+                CheckDirection(candy, Vector2Int.left, extraConnectionCandys); //check left
+                if (extraConnectionCandys.Count >= 2)
+                {
+                    Debug.Log("I have a super vertical match, the color is match is : " + matchCandy.connectionCandys[0].candyType);
+                    extraConnectionCandys.AddRange(matchCandy.connectionCandys);
+                    return new MatchResult() { connectionCandys = extraConnectionCandys, direction = MatchDirection.Super };
+                }
+            }
+            return new MatchResult() { connectionCandys = matchCandy.connectionCandys, direction = matchCandy.direction };
+        }
+        return null;
+    }
+
     //IsConnected
     MatchResult IsConnected(Candy candy)
     {
