@@ -161,7 +161,7 @@ public class PositionBoard : MonoBehaviour
             positionToDestroy.Clear();
         }
     }
-    public bool CheckBoard()
+    public bool CheckBoard(bool takeAction)
     {
         Debug.Log("CheckBoard");
         bool hasMatch = false;
@@ -207,8 +207,25 @@ public class PositionBoard : MonoBehaviour
         {
             Debug.LogError($"Error in CheckBoard: {e.Message}\nStackTrace: {e.StackTrace}");
         }
+        if (takeAction)
+        {
+            RemoveAndRefill(candyToRemove); //remove and refill
+        }
         return hasMatch;
     }
+
+    private void RemoveAndRefill(List<Candy> candyToRemove)
+    {
+       //Removing the candy and clearing the board at the location
+       
+    }
+
+    #region Cascading Candys
+    //RemoveAndRefill
+    //RefillCandy
+    //SpawnCandyAtTop
+    //FindIndexOfLowestNull
+    #endregion
 
     private MatchResult SuperMatch(MatchResult matchCandy)
     {
