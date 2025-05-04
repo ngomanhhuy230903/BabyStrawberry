@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using Unity.VisualScripting;
 using UnityEngine;
 
-public class PositionBoard : MonoBehaviour
+public class CandyBoard : MonoBehaviour
 {
     //define the size of the board
     public int boardWidth = 6;
@@ -13,18 +13,19 @@ public class PositionBoard : MonoBehaviour
     public float spaceingY;
     public float spacingScale = 1.5f;
     //get a reference to our position prefab
-    public GameObject[] positionPrefab;
-    //get a reference to the collection nodes positionBoard + GO
-    public Node[,] positionBoard;
-    public GameObject positionBoardGO;
+    public GameObject[] candyPrefab;
+    //get a reference to the collection nodes candyBoard + GO
+    public Node[,] candyBoard;
+    public GameObject candyBoardGO;
 
-    public List<GameObject> positionToDestroy = new();
+    public List<GameObject> candyToDestroy = new();
+    public GameObject candyParent;
     [SerializeField] private Candy selectedCandy;
     [SerializeField] public bool isProcessingMove;
     //layoutArray
     public ArrayLayout arrayLayout;
-    //public static of positionBoard
-    public static PositionBoard instance;
+    //public static of candyBoard
+    public static CandyBoard instance;
     public void Awake()
     {
         instance = this;
@@ -64,38 +65,38 @@ public class PositionBoard : MonoBehaviour
     public void InitializeBoard()
     {
         DestroyPosition();
-        positionBoard = new Node[boardWidth, boardHeight];
+        candyBoard = new Node[boardWidth, boardHeight];
         spaceingX = (float)((boardWidth - 1) / 2);
         spaceingY = (float)((boardHeight - 1) / 2) + 1;
 
-        // Kiểm tra positionPrefab
-        if (positionPrefab == null || positionPrefab.Length == 0)
+        // Kiểm tra candyPrefab
+        if (candyPrefab == null || candyPrefab.Length == 0)
         {
-            Debug.LogError("PositionBoard: positionPrefab array is null or empty. Please assign candy prefabs in the Inspector.");
+            Debug.LogError("candyBoard: candyPrefab array is null or empty. Please assign candy prefabs in the Inspector.");
             return;
         }
 
-        for (int i = 0; i < positionPrefab.Length; i++)
+        for (int i = 0; i < candyPrefab.Length; i++)
         {
-            if (positionPrefab[i] == null)
+            if (candyPrefab[i] == null)
             {
-                Debug.LogError($"PositionBoard: positionPrefab[{i}] is null. Please assign a valid prefab in the Inspector.");
+                Debug.LogError($"candyBoard: candyPrefab[{i}] is null. Please assign a valid prefab in the Inspector.");
                 return;
             }
-            if (positionPrefab[i].GetComponent<Candy>() == null)
+            if (candyPrefab[i].GetComponent<Candy>() == null)
             {
-                Debug.LogError($"PositionBoard: positionPrefab[{i}] is missing Candy component.");
+                Debug.LogError($"candyBoard: candyPrefab[{i}] is missing Candy component.");
                 return;
             }
-            SpriteRenderer sr = positionPrefab[i].GetComponent<SpriteRenderer>();
+            SpriteRenderer sr = candyPrefab[i].GetComponent<SpriteRenderer>();
             if (sr == null)
             {
-                Debug.LogError($"PositionBoard: positionPrefab[{i}] is missing SpriteRenderer component.");
+                Debug.LogError($"candyBoard: candyPrefab[{i}] is missing SpriteRenderer component.");
                 return;
             }
             if (sr.sprite == null)
             {
-                Debug.LogError($"PositionBoard: positionPrefab[{i}] has SpriteRenderer but no sprite assigned.");
+                Debug.LogError($"candyBoard: candyPrefab[{i}] has SpriteRenderer but no sprite assigned.");
                 return;
             }
         }
@@ -103,14 +104,14 @@ public class PositionBoard : MonoBehaviour
         // Kiểm tra arrayLayout
         if (arrayLayout == null || arrayLayout.rows == null || arrayLayout.rows.Length != boardHeight)
         {
-            Debug.LogError("PositionBoard: arrayLayout is null or has incorrect row count. Please configure ArrayLayout in the Inspector.");
+            Debug.LogError("candyBoard: arrayLayout is null or has incorrect row count. Please configure ArrayLayout in the Inspector.");
             return;
         }
         for (int y = 0; y < boardHeight; y++)
         {
             if (arrayLayout.rows[y].row == null || arrayLayout.rows[y].row.Length != boardWidth)
             {
-                Debug.LogError($"PositionBoard: arrayLayout.rows[{y}].row is null or has incorrect length.");
+                Debug.LogError($"candyBoard: arrayLayout.rows[{y}].row is null or has incorrect length.");
                 return;
             }
         }
@@ -122,13 +123,14 @@ public class PositionBoard : MonoBehaviour
                 Vector3 position = new Vector3((x - spaceingX) * spacingScale, (y - spaceingY) * spacingScale, 0);
                 if (arrayLayout.rows[y].row[x])
                 {
-                    positionBoard[x, y] = new Node(false, null);
+                    candyBoard[x, y] = new Node(false, null);
                 }
                 else
                 {
-                    int randomIndex = Random.Range(0, positionPrefab.Length);
-                    Debug.Log($"Instantiating candy at [{x},{y}] with prefab: {positionPrefab[randomIndex].name}");
-                    GameObject candy = Instantiate(positionPrefab[randomIndex], position, Quaternion.identity);
+                    int randomIndex = Random.Range(0, candyPrefab.Length);
+                    Debug.Log($"Instantiating candy at [{x},{y}] with prefab: {candyPrefab[randomIndex].name}");
+                    GameObject candy = Instantiate(candyPrefab[randomIndex], position, Quaternion.identity);
+                    candy.transform.SetParent(candyParent.transform);
                     if (candy == null)
                     {
                         Debug.LogError($"Failed to instantiate candy at [{x},{y}]");
@@ -143,22 +145,22 @@ public class PositionBoard : MonoBehaviour
                     }
                     candyComponent.setIndicies(x, y);
                     candyComponent.Init(x, y, (CandyType)randomIndex);
-                    positionBoard[x, y] = new Node(true, candy);
-                    positionToDestroy.Add(candy);
+                    candyBoard[x, y] = new Node(true, candy);
+                    candyToDestroy.Add(candy);
                 }
             }
         }
-        CheckBoard();
+        CheckBoard(true);
     }
     private void DestroyPosition()
     {
-        if (positionToDestroy != null)
+        if (candyToDestroy != null)
         {
-            foreach (GameObject position in positionToDestroy)
+            foreach (GameObject position in candyToDestroy)
             {
                 Destroy(position);
             }
-            positionToDestroy.Clear();
+            candyToDestroy.Clear();
         }
     }
     public bool CheckBoard(bool takeAction)
@@ -166,6 +168,14 @@ public class PositionBoard : MonoBehaviour
         Debug.Log("CheckBoard");
         bool hasMatch = false;
         List<Candy> candyToRemove = new List<Candy>();
+        foreach(Node nodeCandy in candyBoard)
+        {
+            if (nodeCandy.candy != null)
+            {
+                nodeCandy.candy.GetComponent<Candy>().isMatched = false;
+
+            }
+        }
         try
         {
             for (int x = 0; x < boardWidth; x++)
@@ -173,10 +183,10 @@ public class PositionBoard : MonoBehaviour
                 for (int y = 0; y < boardHeight; y++)
                 {
                     //check if the current position is usable
-                    if (positionBoard[x, y].isUsable && positionBoard[x, y].candy != null)
+                    if (candyBoard[x, y].isUsable && candyBoard[x, y].candy != null)
                     {
                         //then proceed to get candy class in node.
-                        Candy candy = positionBoard[x, y].candy.GetComponent<Candy>();
+                        Candy candy = candyBoard[x, y].candy.GetComponent<Candy>();
 
                         if (candy == null)
                         {
@@ -209,22 +219,127 @@ public class PositionBoard : MonoBehaviour
         }
         if (takeAction)
         {
+            foreach(Candy candy in candyToRemove)
+            {
+                candy.isMatched = false;
+            }
             RemoveAndRefill(candyToRemove); //remove and refill
+            if(CheckBoard(false)) //check the board again without taking action
+            {
+                CheckBoard(true);
+            }
         }
         return hasMatch;
     }
 
-    private void RemoveAndRefill(List<Candy> candyToRemove)
-    {
-       //Removing the candy and clearing the board at the location
-       
-    }
+
+
 
     #region Cascading Candys
     //RemoveAndRefill
+    private void RemoveAndRefill(List<Candy> candyToRemove)
+    {
+        //Removing the candy and clearing the board at the location
+        foreach (Candy candy in candyToRemove)
+        {
+            //getting it's x and y indicites and storing them
+            int xIndex = candy.xIndex;
+            int yIndex = candy.yIndex;
+
+            //Destroy the candy
+            Destroy(candy.gameObject);
+            //clear a blank node on the candy board
+            candyBoard[xIndex, yIndex] = new Node(true, null);
+        }
+        for (int x = 0; x < boardWidth; x++)
+        {
+            for (int y = 0; y < boardHeight; y++)
+            {
+                if (candyBoard[x,y].candy == null)
+                {
+                    Debug.Log("The location X: " + x + " Y: " + y + " is empty , attemping to refill it");
+                    RefillCandy(x, y);
+                }
+
+            }
+        }
+        CheckBoard(false); //check the board again without taking action
+        Debug.Log("Refill complete");
+    }
     //RefillCandy
+    private void RefillCandy(int x, int y)
+    {
+        // y offset
+        int yOffset = 1;
+
+        //while the cell above our current cell is null and we're not at the top of the board
+        while (y + yOffset < boardHeight && candyBoard[x, y + yOffset].candy == null)
+        {
+            //increase y offset
+            Debug.Log("The location X: " + x + " Y: " + y + " is empty, moving up to refill it");
+            yOffset++;
+        }
+        //we've either hit the top of the board or we have a candy above us
+        if (y + yOffset < boardHeight && candyBoard[x,y + yOffset].candy != null)
+        {
+            //we're found a candy above us
+            Candy candyAbove = candyBoard[x, y + yOffset].candy.GetComponent<Candy>();
+
+            //move it to the current position
+            Vector3 targetPos = new Vector3(x - spaceingX, y - spaceingY, candyAbove.transform.position.z);
+            Debug.Log("Moving candy from X: " + x + " Y: " + (y + yOffset) + " to X: " + x + " Y: " + y);
+            //move the candy
+            candyAbove.MoveToTarget(targetPos);
+            //update indicites
+            candyAbove.setIndicies(x, y);
+            //update the candy board
+            candyBoard[x, y] = candyBoard[x,y +yOffset];
+            //set the candy above to null
+            candyBoard[x, y + yOffset] = new Node(true, null);
+        }
+        //if we've hit the top of the board without finding a candy
+        if (y + yOffset == boardHeight)
+        {
+            Debug.Log("I've reached the top of the board without finding a candy");
+            SpawnCandyAtTop(x);
+        }
+    }
+
     //SpawnCandyAtTop
+
+    private void SpawnCandyAtTop(int x)
+    {
+        int index = FindIndexOfLowestNull(x);
+        int locationToMoveTo = 8 - index;
+        Debug.Log("About to spawn a candy, ideally i'd like to put it in the index of: " + index);
+        //get a random candy
+        int randomIndex = Random.Range(0, candyPrefab.Length);
+        GameObject newCandy = Instantiate(candyPrefab[randomIndex], new Vector2(x - spaceingX,boardHeight - spaceingY), Quaternion.identity);
+        newCandy.transform.SetParent(candyParent.transform);
+        //set the candy indicites
+        newCandy.GetComponent<Candy>().setIndicies(x, index);
+        //update the candy board
+        candyBoard[x, locationToMoveTo] = new Node(true, newCandy);
+        //move it to that location
+        Vector3 targetPos = new Vector3(newCandy.transform.position.x, newCandy.transform.position.y - locationToMoveTo, newCandy.transform.position.z);
+        newCandy.GetComponent<Candy>().MoveToTarget(targetPos);
+    }
+
+
     //FindIndexOfLowestNull
+
+    private int FindIndexOfLowestNull(int x)
+    {
+        int lowestNull = 99;
+        for (int y = 7; y >= 0; y--)
+        {
+            if (candyBoard[x, y].candy == null)
+            {
+                lowestNull = y;
+            }
+        }
+        return lowestNull;
+    }
     #endregion
 
     private MatchResult SuperMatch(MatchResult matchCandy)
@@ -327,10 +442,10 @@ public class PositionBoard : MonoBehaviour
         while (x >= 0 && x < boardWidth && y >= 0 && y < boardHeight)
         {
             //check if the current position is usable
-            if (positionBoard[x, y].isUsable && positionBoard[x, y].candy != null)
+            if (candyBoard[x, y].isUsable && candyBoard[x, y].candy != null)
             {
                 //then proceed to get candy class in node.
-                Candy nextCandy = positionBoard[x, y].candy.GetComponent<Candy>();
+                Candy nextCandy = candyBoard[x, y].candy.GetComponent<Candy>();
                 //does our candyType match? it must also not be matched
                 if (!nextCandy.isMatched && nextCandy.candyType == candyType)
                 {
@@ -454,9 +569,9 @@ public class PositionBoard : MonoBehaviour
         Vector3 firstPos = firstCandy.transform.position;
         Vector3 secondPos = secondCandy.transform.position;
 
-        // Cập nhật mảng positionBoard
-        positionBoard[firstX, firstY].candy = secondCandy.gameObject;
-        positionBoard[secondX, secondY].candy = firstCandy.gameObject;
+        // Cập nhật mảng candyBoard
+        candyBoard[firstX, firstY].candy = secondCandy.gameObject;
+        candyBoard[secondX, secondY].candy = firstCandy.gameObject;
 
         // Cập nhật chỉ số của các viên kẹo
         firstCandy.setIndicies(secondX, secondY);
@@ -485,7 +600,7 @@ public class PositionBoard : MonoBehaviour
 
         try
         {
-            hasMatch = CheckBoard();
+            hasMatch = CheckBoard(true);
             Debug.Log($"CheckBoard result: {hasMatch}");
         }
         catch (System.Exception e)

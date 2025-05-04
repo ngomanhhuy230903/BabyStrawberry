@@ -133,19 +133,19 @@ public class Candy : MonoBehaviour
     {
         Debug.Log($"Direct click on candy: Type={candyType}, Position=[{xIndex},{yIndex}]");
         // Gọi luôn SelectCandy để đồng bộ với logic swap
-        if (PositionBoard.instance != null && !PositionBoard.instance.isProcessingMove)
+        if (CandyBoard.instance != null && !CandyBoard.instance.isProcessingMove)
         {
-            PositionBoard.instance.SelectCandy(this);
+            CandyBoard.instance.SelectCandy(this);
         }
     }
 
     public bool ValidatePosition()
     {
-        if (PositionBoard.instance == null) return true;
+        if (CandyBoard.instance == null) return true;
 
         Vector3 expectedPosition = new Vector3(
-            (xIndex - PositionBoard.instance.spaceingX) * PositionBoard.instance.spacingScale,
-            (yIndex - PositionBoard.instance.spaceingY) * PositionBoard.instance.spacingScale,
+            (xIndex - CandyBoard.instance.spaceingX) * CandyBoard.instance.spacingScale,
+            (yIndex - CandyBoard.instance.spaceingY) * CandyBoard.instance.spacingScale,
             transform.position.z
         );
 
