@@ -122,6 +122,37 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
+--- !u!1 &103663256
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 103663257}
+  m_Layer: 0
+  m_Name: Candys
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &103663257
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 103663256}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 0.8, y: 0.8, z: 0.8}
+  m_ConstrainProportionsScale: 1
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &330585543
 GameObject:
   m_ObjectHideFlags: 0
@@ -460,15 +491,16 @@ MonoBehaviour:
   spaceingX: 0
   spaceingY: 0
   spacingScale: 1.75
-  positionPrefab:
-  - {fileID: 3939527605857352177, guid: 38092738483cdeb4c9b5c549d19b6045, type: 3}
-  - {fileID: 5522963162319307860, guid: 1a3e3d3b560fa194a9d996aff7587253, type: 3}
-  - {fileID: 6611521531083608616, guid: d65d7bf506c88794bbb9b9f800e5848c, type: 3}
-  - {fileID: 3074768587222930122, guid: 2bb01f6e9a54e5246bd71a2b1f76c759, type: 3}
-  - {fileID: 5937152101282392489, guid: d664bdbefd97fab46937f99a8aec6d59, type: 3}
+  candyPrefab:
   - {fileID: 5850356763111794963, guid: f4208941783e2f045b86a9167f930aab, type: 3}
-  positionBoardGO: {fileID: 876688497}
-  positionToDestroy: []
+  - {fileID: 5937152101282392489, guid: d664bdbefd97fab46937f99a8aec6d59, type: 3}
+  - {fileID: 3074768587222930122, guid: 2bb01f6e9a54e5246bd71a2b1f76c759, type: 3}
+  - {fileID: 6611521531083608616, guid: d65d7bf506c88794bbb9b9f800e5848c, type: 3}
+  - {fileID: 5522963162319307860, guid: 1a3e3d3b560fa194a9d996aff7587253, type: 3}
+  - {fileID: 3939527605857352177, guid: 38092738483cdeb4c9b5c549d19b6045, type: 3}
+  candyBoardGO: {fileID: 876688497}
+  candyToDestroy: []
+  candyParent: {fileID: 103663256}
   selectedCandy: {fileID: 0}
   isProcessingMove: 0
   arrayLayout:
@@ -504,3 +536,4 @@ SceneRoots:
   - {fileID: 410087041}
   - {fileID: 832575519}
   - {fileID: 876688499}
+  - {fileID: 103663257}
