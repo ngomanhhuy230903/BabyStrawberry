@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -15,6 +16,10 @@ public class GameManager : MonoBehaviour
     public int scores;// the number of points you have
 
     public bool isGameOver;
+
+    public TMP_Text pointText;
+    public TMP_Text movesText;
+    public TMP_Text goalText;
     private void Awake()
     {
             instance = this;
@@ -34,7 +39,9 @@ public class GameManager : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
-        
+        pointText.text = "Points: " + scores.ToString();
+        movesText.text = "Moves: " + moves.ToString();
+        goalText.text = "Goal: " + goal.ToString();
     }
     public void ProcessTurn(int pointToGain,bool subtractMoves)
     {
