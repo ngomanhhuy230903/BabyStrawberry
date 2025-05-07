@@ -22,6 +22,7 @@ public class CandyBoard : MonoBehaviour
     public GameObject candyParent;
     [SerializeField] private Candy selectedCandy;
     [SerializeField] public bool isProcessingMove;
+    [SerializeField] List<Candy> candyToRemove = new List<Candy>();
     //layoutArray
     public ArrayLayout arrayLayout;
     //public static of candyBoard
@@ -150,7 +151,15 @@ public class CandyBoard : MonoBehaviour
                 }
             }
         }
-        CheckBoard(true);
+        //if (CheckBoard())
+        //{
+        //    Debug.Log("We have match let's destroy it and refill the board");
+        //}
+        //else
+        //{
+
+        //   Debug.Log("No match found, board initialized successfully");
+        //}
     }
     private void DestroyPosition()
     {
@@ -163,11 +172,15 @@ public class CandyBoard : MonoBehaviour
             candyToDestroy.Clear();
         }
     }
-    public bool CheckBoard(bool takeAction)
+    public bool CheckBoard()
     {
+        if(GameManager.instance.isGameOver)
+        {
+            return false;
+        }
         Debug.Log("CheckBoard");
         bool hasMatch = false;
-        List<Candy> candyToRemove = new List<Candy>();
+        candyToRemove.Clear(); // Clear the list of candies to remove before checking the board
         foreach(Node nodeCandy in candyBoard)
         {
             if (nodeCandy.candy != null)
@@ -217,24 +230,26 @@ public class CandyBoard : MonoBehaviour
         {
             Debug.LogError($"Error in CheckBoard: {e.Message}\nStackTrace: {e.StackTrace}");
         }
-        if (takeAction)
-        {
-            foreach(Candy candy in candyToRemove)
-            {
-                candy.isMatched = false;
-            }
-            RemoveAndRefill(candyToRemove); //remove and refill
-            if(CheckBoard(false)) //check the board again without taking action
-            {
-                CheckBoard(true);
-            }
-        }
+
         return hasMatch;
     }
 
 
 
-
+    public IEnumerator ProcessTurnOnMatchedBoard(bool subtractMoves)
+    {
+        foreach (Candy candy in candyToRemove)
+        {
+            candy.isMatched = false;
+        }
+        RemoveAndRefill(candyToRemove); //remove and refill
+        GameManager.instance.ProcessTurn(candyToRemove.Count, subtractMoves); //process the turn
+        yield return new WaitForSeconds(0.4f);
+        if(CheckBoard())
+        {
+            StartCoroutine(ProcessTurnOnMatchedBoard(false));
+        }    
+    }
     #region Cascading Candys
     //RemoveAndRefill
     private void RemoveAndRefill(List<Candy> candyToRemove)
@@ -263,7 +278,7 @@ public class CandyBoard : MonoBehaviour
 
             }
         }
-        CheckBoard(false); //check the board again without taking action
+        CheckBoard(); //check the board again without taking action
         Debug.Log("Refill complete");
     }
     //RefillCandy
@@ -598,9 +613,10 @@ public class CandyBoard : MonoBehaviour
 
         bool hasMatch = false;
 
+
         try
         {
-            hasMatch = CheckBoard(true);
+            hasMatch = CheckBoard();
             Debug.Log($"CheckBoard result: {hasMatch}");
         }
         catch (System.Exception e)
@@ -616,6 +632,11 @@ public class CandyBoard : MonoBehaviour
 
             // Đợi một chút trước khi đánh dấu là đã hoàn thành
             yield return new WaitForSeconds(0.5f);
+        }
+        if (CheckBoard())
+        {
+            //Start a coroutine that is going to process our matches
+            StartCoroutine(ProcessTurnOnMatchedBoard(true));
         }
         else
         {

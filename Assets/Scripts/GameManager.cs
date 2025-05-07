@@ -55,6 +55,7 @@ public class GameManager : MonoBehaviour
             isGameOver = true;
             backgroundPanel.SetActive(true);
             victoryPanel.SetActive(true);
+            CandyBoard.instance.candyParent.SetActive(false);
             return;
             LoseGame();
         }
@@ -64,6 +65,7 @@ public class GameManager : MonoBehaviour
             isGameOver = true;
             backgroundPanel.SetActive(true);
             victoryPanel.SetActive(true);
+            CandyBoard.instance.candyParent.SetActive(false);
             return;
             WinGame();
         }

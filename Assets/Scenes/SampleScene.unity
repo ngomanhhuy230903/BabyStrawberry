@@ -238,7 +238,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &189053058
 RectTransform:
   m_ObjectHideFlags: 0
@@ -313,7 +313,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &293541508
 RectTransform:
   m_ObjectHideFlags: 0
@@ -681,7 +681,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: -0, y: -206}
+  m_AnchoredPosition: {x: 0, y: -206}
   m_SizeDelta: {x: 160, y: 55.584}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &400948821
@@ -1322,7 +1322,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: -0, y: -206}
+  m_AnchoredPosition: {x: 0, y: -206}
   m_SizeDelta: {x: 160, y: 55.584}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &708713932
@@ -1580,6 +1580,7 @@ MonoBehaviour:
   candyParent: {fileID: 103663256}
   selectedCandy: {fileID: 0}
   isProcessingMove: 0
+  candyToRemove: []
   arrayLayout:
     rows:
     - row: 000000000000
