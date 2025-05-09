@@ -20,6 +20,7 @@ public class CandyBoard : MonoBehaviour
     [SerializeField] List<Candy> candyToRemove = new List<Candy>();
     public ArrayLayout arrayLayout;
     public static CandyBoard instance;
+    private bool isInitializingBoard = false; // Flag to prevent recursive board initialization
 
     public void Awake()
     {
@@ -58,11 +59,33 @@ public class CandyBoard : MonoBehaviour
             else
                 Debug.Log("No candy selected");
         }
+        // Check for possible moves periodically if needed
+        if (Input.GetKeyDown(KeyCode.M))
+        {
+            bool hasPossibleMatches = CheckForPossibleMatches();
+            Debug.Log($"Board has possible matches: {hasPossibleMatches}");
+        }
     }
 
     public void InitializeBoard()
     {
-        DestroyPosition();
+        if (isInitializingBoard)
+        {
+            Debug.LogWarning("Board initialization already in progress, skipping request");
+            return;
+        }
+
+        isInitializingBoard = true;
+        StartCoroutine(InitializeBoardCoroutine());
+    }
+
+    private IEnumerator InitializeBoardCoroutine()
+    {
+        Debug.Log("Initializing board...");
+
+        // Fix Issue 2: Ensure complete board destruction
+        ClearEntireBoard();
+
         candyBoard = new Node[boardWidth, boardHeight];
         spaceingX = (float)((boardWidth - 1) / 2) + 1;
         spaceingY = (float)((boardHeight - 1) / 2) - 1;
@@ -70,7 +93,8 @@ public class CandyBoard : MonoBehaviour
         if (candyPrefab == null || candyPrefab.Length == 0)
         {
             Debug.LogError("candyBoard: candyPrefab array is null or empty. Please assign candy prefabs in the Inspector.");
-            return;
+            isInitializingBoard = false;
+            yield break;
         }
 
         for (int i = 0; i < candyPrefab.Length; i++)
@@ -78,40 +102,75 @@ public class CandyBoard : MonoBehaviour
             if (candyPrefab[i] == null)
             {
                 Debug.LogError($"candyBoard: candyPrefab[{i}] is null. Please assign a valid prefab in the Inspector.");
-                return;
+                isInitializingBoard = false;
+                yield break;
             }
             if (candyPrefab[i].GetComponent<Candy>() == null)
             {
                 Debug.LogError($"candyBoard: candyPrefab[{i}] is missing Candy component.");
-                return;
+                isInitializingBoard = false;
+                yield break;
             }
             SpriteRenderer sr = candyPrefab[i].GetComponent<SpriteRenderer>();
             if (sr == null)
             {
                 Debug.LogError($"candyBoard: candyPrefab[{i}] is missing SpriteRenderer component.");
-                return;
+                isInitializingBoard = false;
+                yield break;
             }
             if (sr.sprite == null)
             {
                 Debug.LogError($"candyBoard: candyPrefab[{i}] has SpriteRenderer but no sprite assigned.");
-                return;
+                isInitializingBoard = false;
+                yield break;
             }
         }
 
         if (arrayLayout == null || arrayLayout.rows == null || arrayLayout.rows.Length != boardHeight)
         {
             Debug.LogError("candyBoard: arrayLayout is null or has incorrect row count. Please configure ArrayLayout in the Inspector.");
-            return;
+            isInitializingBoard = false;
+            yield break;
         }
         for (int y = 0; y < boardHeight; y++)
         {
             if (arrayLayout.rows[y].row == null || arrayLayout.rows[y].row.Length != boardWidth)
             {
                 Debug.LogError($"candyBoard: arrayLayout.rows[{y}].row is null or has incorrect length.");
-                return;
+                isInitializingBoard = false;
+                yield break;
             }
         }
 
+        // Create the board ensuring no initial matches
+        CreateBoardWithoutMatches();
+
+        // Check the board after creation
+        yield return new WaitForSeconds(0.5f);
+
+        // Check for initial matches and process them
+        if (CheckBoard())
+        {
+            Debug.Log("Initial matches found, processing...");
+            StartCoroutine(ProcessTurnOnMatchedBoard(false));
+            yield return new WaitForSeconds(0.5f);
+        }
+
+        // Verify if there are possible matches on the board
+        if (!CheckForPossibleMatches())
+        {
+            Debug.Log("No possible matches on the board, reinitializing...");
+            isInitializingBoard = false;
+            InitializeBoard();
+            yield break;
+        }
+
+        Debug.Log("Board initialization complete with valid moves available");
+        isInitializingBoard = false;
+    }
+
+    private void CreateBoardWithoutMatches()
+    {
         for (int y = 0; y < boardHeight; y++)
         {
             for (int x = 0; x < boardWidth; x++)
@@ -123,7 +182,20 @@ public class CandyBoard : MonoBehaviour
                 }
                 else
                 {
-                    int randomIndex = Random.Range(0, candyPrefab.Length);
+                    // Prevent immediate matches when creating the board
+                    List<int> availableTypes = GetAvailableCandyTypes(x, y);
+                    if (availableTypes.Count == 0)
+                    {
+                        // If no valid types (shouldn't happen normally), use any type
+                        availableTypes = new List<int>();
+                        for (int i = 0; i < candyPrefab.Length; i++)
+                        {
+                            availableTypes.Add(i);
+                        }
+                    }
+
+                    int randomIndex = availableTypes[Random.Range(0, availableTypes.Count)];
+
                     Debug.Log($"Instantiating candy at [{x},{y}] with prefab: {candyPrefab[randomIndex].name}");
                     GameObject candy = Instantiate(candyPrefab[randomIndex], position, Quaternion.identity);
                     candy.transform.SetParent(candyParent.transform);
@@ -148,6 +220,87 @@ public class CandyBoard : MonoBehaviour
         }
     }
 
+    // Get available candy types that won't create an immediate match at position (x,y)
+    private List<int> GetAvailableCandyTypes(int x, int y)
+    {
+        List<int> availableTypes = new List<int>();
+        for (int i = 0; i < candyPrefab.Length; i++)
+        {
+            availableTypes.Add(i);
+        }
+
+        // Check horizontal matches (left)
+        if (x >= 2 &&
+            candyBoard[x - 1, y] != null && candyBoard[x - 1, y].isUsable && candyBoard[x - 1, y].candy != null &&
+            candyBoard[x - 2, y] != null && candyBoard[x - 2, y].isUsable && candyBoard[x - 2, y].candy != null)
+        {
+            CandyType type1 = candyBoard[x - 1, y].candy.GetComponent<Candy>().candyType;
+            CandyType type2 = candyBoard[x - 2, y].candy.GetComponent<Candy>().candyType;
+
+            if (type1 == type2)
+            {
+                int indexToRemove = (int)type1;
+                if (availableTypes.Contains(indexToRemove))
+                {
+                    availableTypes.Remove(indexToRemove);
+                }
+            }
+        }
+
+        // Check vertical matches (down)
+        if (y >= 2 &&
+            candyBoard[x, y - 1] != null && candyBoard[x, y - 1].isUsable && candyBoard[x, y - 1].candy != null &&
+            candyBoard[x, y - 2] != null && candyBoard[x, y - 2].isUsable && candyBoard[x, y - 2].candy != null)
+        {
+            CandyType type1 = candyBoard[x, y - 1].candy.GetComponent<Candy>().candyType;
+            CandyType type2 = candyBoard[x, y - 2].candy.GetComponent<Candy>().candyType;
+
+            if (type1 == type2)
+            {
+                int indexToRemove = (int)type1;
+                if (availableTypes.Contains(indexToRemove))
+                {
+                    availableTypes.Remove(indexToRemove);
+                }
+            }
+        }
+
+        return availableTypes;
+    }
+
+    private void ClearEntireBoard()
+    {
+        // First destroy any existing candies
+        if (candyToDestroy != null && candyToDestroy.Count > 0)
+        {
+            foreach (GameObject candy in candyToDestroy)
+            {
+                if (candy != null)
+                {
+                    Destroy(candy);
+                }
+            }
+            candyToDestroy.Clear();
+        }
+
+        // Also check for any other candy children in the parent that might have been missed
+        if (candyParent != null)
+        {
+            foreach (Transform child in candyParent.transform)
+            {
+                if (child.gameObject != null && child.gameObject != candyParent)
+                {
+                    Destroy(child.gameObject);
+                }
+            }
+        }
+
+        // Reset other relevant variables
+        selectedCandy = null;
+        isProcessingMove = false;
+        candyToRemove.Clear();
+    }
+
     private void DestroyPosition()
     {
         if (candyToDestroy != null)
@@ -158,6 +311,126 @@ public class CandyBoard : MonoBehaviour
             }
             candyToDestroy.Clear();
         }
+    }
+
+    // Check if there are any potential matches on the board
+    public bool CheckForPossibleMatches()
+    {
+        if (GameManager.instance.isGameOver)
+        {
+            return false;
+        }
+
+        // Check horizontal swaps
+        for (int y = 0; y < boardHeight; y++)
+        {
+            for (int x = 0; x < boardWidth - 1; x++)
+            {
+                if (candyBoard[x, y].isUsable && candyBoard[x + 1, y].isUsable &&
+                    candyBoard[x, y].candy != null && candyBoard[x + 1, y].candy != null)
+                {
+                    // Temporarily swap
+                    GameObject temp = candyBoard[x, y].candy;
+                    candyBoard[x, y].candy = candyBoard[x + 1, y].candy;
+                    candyBoard[x + 1, y].candy = temp;
+
+                    // Check if this creates a match
+                    Candy candy1 = candyBoard[x, y].candy.GetComponent<Candy>();
+                    Candy candy2 = candyBoard[x + 1, y].candy.GetComponent<Candy>();
+
+                    int tempX1 = candy1.xIndex;
+                    int tempY1 = candy1.yIndex;
+                    int tempX2 = candy2.xIndex;
+                    int tempY2 = candy2.yIndex;
+
+                    candy1.setIndicies(x, y);
+                    candy2.setIndicies(x + 1, y);
+
+                    bool hasMatch = false;
+
+                    // Check if the swap would create a match
+                    MatchResult match1 = IsConnected(candy1);
+                    MatchResult match2 = IsConnected(candy2);
+
+                    if ((match1.connectionCandys != null && match1.connectionCandys.Count >= 3) ||
+                        (match2.connectionCandys != null && match2.connectionCandys.Count >= 3))
+                    {
+                        hasMatch = true;
+                    }
+
+                    // Swap back
+                    candyBoard[x + 1, y].candy = candyBoard[x, y].candy;
+                    candyBoard[x, y].candy = temp;
+
+                    // Reset indices
+                    candy1.setIndicies(tempX1, tempY1);
+                    candy2.setIndicies(tempX2, tempY2);
+
+                    if (hasMatch)
+                    {
+                        Debug.Log($"Found potential match by swapping [{x},{y}] with [{x + 1},{y}]");
+                        return true;
+                    }
+                }
+            }
+        }
+
+        // Check vertical swaps
+        for (int x = 0; x < boardWidth; x++)
+        {
+            for (int y = 0; y < boardHeight - 1; y++)
+            {
+                if (candyBoard[x, y].isUsable && candyBoard[x, y + 1].isUsable &&
+                    candyBoard[x, y].candy != null && candyBoard[x, y + 1].candy != null)
+                {
+                    // Temporarily swap
+                    GameObject temp = candyBoard[x, y].candy;
+                    candyBoard[x, y].candy = candyBoard[x, y + 1].candy;
+                    candyBoard[x, y + 1].candy = temp;
+
+                    // Check if this creates a match
+                    Candy candy1 = candyBoard[x, y].candy.GetComponent<Candy>();
+                    Candy candy2 = candyBoard[x, y + 1].candy.GetComponent<Candy>();
+
+                    int tempX1 = candy1.xIndex;
+                    int tempY1 = candy1.yIndex;
+                    int tempX2 = candy2.xIndex;
+                    int tempY2 = candy2.yIndex;
+
+                    candy1.setIndicies(x, y);
+                    candy2.setIndicies(x, y + 1);
+
+                    bool hasMatch = false;
+
+                    // Check if the swap would create a match
+                    MatchResult match1 = IsConnected(candy1);
+                    MatchResult match2 = IsConnected(candy2);
+
+                    if ((match1.connectionCandys != null && match1.connectionCandys.Count >= 3) ||
+                        (match2.connectionCandys != null && match2.connectionCandys.Count >= 3))
+                    {
+                        hasMatch = true;
+                    }
+
+                    // Swap back
+                    candyBoard[x, y + 1].candy = candyBoard[x, y].candy;
+                    candyBoard[x, y].candy = temp;
+
+                    // Reset indices
+                    candy1.setIndicies(tempX1, tempY1);
+                    candy2.setIndicies(tempX2, tempY2);
+
+                    if (hasMatch)
+                    {
+                        Debug.Log($"Found potential match by swapping [{x},{y}] with [{x},{y + 1}]");
+                        return true;
+                    }
+                }
+            }
+        }
+
+        Debug.Log("No potential matches found on the board!");
+        return false;
     }
 
     public bool CheckBoard()
@@ -217,6 +490,11 @@ public class CandyBoard : MonoBehaviour
 
     public IEnumerator ProcessTurnOnMatchedBoard(bool subtractMoves)
     {
+        if (candyToRemove.Count == 0)
+        {
+            yield break;
+        }
+
         foreach (Candy candy in candyToRemove)
         {
             candy.isMatched = false;
@@ -228,104 +506,129 @@ public class CandyBoard : MonoBehaviour
         {
             StartCoroutine(ProcessTurnOnMatchedBoard(false));
         }
+        else
+        {
+            // Check if there are possible matches after cascade is complete
+            yield return new WaitForSeconds(0.2f);
+            if (!CheckForPossibleMatches() && !isInitializingBoard)
+            {
+                Debug.Log("No more possible matches after cascade, reinitializing board...");
+                InitializeBoard();
+            }
+        }
     }
 
     #region Cascading Candys
     private void RemoveAndRefill(List<Candy> candyToRemove)
     {
+        // First mark positions that need refilling
+        HashSet<int> columnsToRefill = new HashSet<int>();
+
+        // Remove matched candies
         foreach (Candy candy in candyToRemove)
         {
             int xIndex = candy.xIndex;
             int yIndex = candy.yIndex;
+
+            // Add column to refill set
+            columnsToRefill.Add(xIndex);
+
+            // Destroy candy and clear board position
             Destroy(candy.gameObject);
             candyBoard[xIndex, yIndex] = new Node(true, null);
         }
-        for (int x = 0; x < boardWidth; x++)
+
+        foreach (int x in columnsToRefill)
         {
-            for (int y = 0; y < boardHeight; y++)
-            {
-                if (candyBoard[x, y].candy == null)
-                {
-                    Debug.Log($"The location X: {x} Y: {y} is empty, attempting to refill it");
-                    RefillCandy(x, y);
-                }
-            }
+            // Collapse column first - move all remaining candies down to fill gaps
+            CollapseColumn(x);
+
+            // Then fill empty spaces at the top with new candies
+            FillEmptySpacesInColumn(x);
         }
+
         CheckBoard();
         Debug.Log("Refill complete");
     }
-
-    private void RefillCandy(int x, int y)
+    private void CollapseColumn(int x)
     {
-        int yOffset = 1;
-        while (y + yOffset < boardHeight && candyBoard[x, y + yOffset].candy == null)
+        for (int y = 0; y < boardHeight - 1; y++)
         {
-            yOffset++;
-        }
-        if (y + yOffset < boardHeight && candyBoard[x, y + yOffset].candy != null)
-        {
-            Candy candyAbove = candyBoard[x, y + yOffset].candy.GetComponent<Candy>();
-            Vector3 targetPos = new Vector3(
-                (x - spaceingX) * spacingScale,
-                (y - spaceingY) * spacingScale,
-                candyAbove.transform.position.z
-            );
-            Debug.Log($"Moving candy from X: {x} Y: {y + yOffset} to X: {x} Y: {y}, TargetPos: {targetPos}");
-            candyAbove.MoveToTarget(targetPos);
-            candyAbove.setIndicies(x, y);
-            candyBoard[x, y] = candyBoard[x, y + yOffset];
-            candyBoard[x, y + yOffset] = new Node(true, null);
-            if (y + yOffset < boardHeight)
+            // If current position is empty and usable, look for candy above to move down
+            if (candyBoard[x, y].isUsable && candyBoard[x, y].candy == null)
             {
-                RefillCandy(x, y + yOffset);
+                for (int aboveY = y + 1; aboveY < boardHeight; aboveY++)
+                {
+                    if (candyBoard[x, aboveY].isUsable && candyBoard[x, aboveY].candy != null)
+                    {
+                        // Found candy above, move it down to current position
+                        Candy candyToMove = candyBoard[x, aboveY].candy.GetComponent<Candy>();
+                        Vector3 targetPos = new Vector3(
+                            (x - spaceingX) * spacingScale,
+                            (y - spaceingY) * spacingScale,
+                            candyToMove.transform.position.z
+                        );
+
+                        Debug.Log($"Moving candy from X: {x} Y: {aboveY} to X: {x} Y: {y}");
+                        candyToMove.MoveToTarget(targetPos);
+                        candyToMove.setIndicies(x, y);
+
+                        // Update board references
+                        candyBoard[x, y] = candyBoard[x, aboveY];
+                        candyBoard[x, aboveY] = new Node(true, null);
+                        break;
+                    }
+                }
             }
         }
-        else if (y + yOffset >= boardHeight)
-        {
-            Debug.Log($"Reached the top of column X: {x} at Y: {y}, spawning new candy");
-            SpawnCandyAtTop(x, y);
-        }
     }
 
-    private void SpawnCandyAtTop(int x, int y)
-    {
-        int index = FindIndexOfLowestNull(x);
-        if (index == -1 || index < y)
-        {
-            Debug.LogWarning($"No valid empty slot found in column X: {x} for Y: {y}, skipping spawn");
-            return;
-        }
-        Debug.Log($"Spawning candy in column X: {x} at index Y: {index}");
-        int randomIndex = Random.Range(0, candyPrefab.Length);
-        Vector3 spawnPos = new Vector3(
-            (x - spaceingX) * spacingScale,
-            (boardHeight - spaceingY) * spacingScale,
-            0
-        );
-        GameObject newCandy = Instantiate(candyPrefab[randomIndex], spawnPos, Quaternion.identity);
-        newCandy.transform.SetParent(candyParent.transform);
-        Candy candyComponent = newCandy.GetComponent<Candy>();
-        candyComponent.setIndicies(x, index);
-        Vector3 targetPos = new Vector3(
-            (x - spaceingX) * spacingScale,
-            (index - spaceingY) * spacingScale,
-            0
-        );
-        Debug.Log($"Moving new candy to X: {x} Y: {index}, TargetPos: {targetPos}");
-        candyComponent.MoveToTarget(targetPos);
-        candyBoard[x, index] = new Node(true, newCandy);
-    }
-
-    private int FindIndexOfLowestNull(int x)
+    // Fill empty spaces at the top of column
+    private void FillEmptySpacesInColumn(int x)
     {
         for (int y = 0; y < boardHeight; y++)
         {
-            if (candyBoard[x, y].candy == null)
+            if (candyBoard[x, y].isUsable && candyBoard[x, y].candy == null)
             {
-                return y;
+                // Spawn new candy for this empty position
+                List<int> availableTypes = GetAvailableCandyTypes(x, y);
+                if (availableTypes.Count == 0)
+                {
+                    // If no valid types, use any type
+                    availableTypes = new List<int>();
+                    for (int i = 0; i < candyPrefab.Length; i++)
+                    {
+                        availableTypes.Add(i);
+                    }
+                }
+
+                int randomIndex = availableTypes[Random.Range(0, availableTypes.Count)];
+
+                Vector3 spawnPos = new Vector3(
+                    (x - spaceingX) * spacingScale,
+                    (boardHeight - spaceingY + y) * spacingScale, // Spawn above the visible board
+                    0
+                );
+
+                Vector3 targetPos = new Vector3(
+                    (x - spaceingX) * spacingScale,
+                    (y - spaceingY) * spacingScale,
+                    0
+                );
+
+                GameObject newCandy = Instantiate(candyPrefab[randomIndex], spawnPos, Quaternion.identity);
+                newCandy.transform.SetParent(candyParent.transform);
+                Candy candyComponent = newCandy.GetComponent<Candy>();
+                candyComponent.setIndicies(x, y);
+                candyComponent.Init(x, y, (CandyType)randomIndex);
+                candyComponent.MoveToTarget(targetPos);
+
+                candyBoard[x, y] = new Node(true, newCandy);
+                candyToDestroy.Add(newCandy);
+
+                Debug.Log($"Created new candy at column X: {x}, row Y: {y}");
             }
         }
-        return -1;
     }
     #endregion
 
@@ -543,6 +846,14 @@ public class CandyBoard : MonoBehaviour
             Debug.Log("No match found, swapping back");
             DoSwap(firstCandy, secondCandy);
             yield return new WaitForSeconds(0.3f);
+
+            // Check if there are any valid moves after the swap back
+            if (!CheckForPossibleMatches())
+            {
+                Debug.Log("No possible matches remain after failed swap, reinitializing board...");
+                yield return new WaitForSeconds(0.5f);
+                InitializeBoard();
+            }
         }
         isProcessingMove = false;
         Debug.Log("=== ProcessMatches END ===");
