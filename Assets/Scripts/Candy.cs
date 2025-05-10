@@ -9,7 +9,17 @@ public enum CandyType
     Green,
     Purple,
     Blue,
-    Orange
+    Orange,
+    // Candy đặc biệt
+    RowClearer,  // Candy xóa hàng ngang
+    ColumnClearer // Candy xóa hàng dọc
+}
+
+public enum SpecialCandyEffect
+{
+    None,
+    ClearRow,
+    ClearColumn
 }
 
 public class Candy : MonoBehaviour
@@ -19,6 +29,8 @@ public class Candy : MonoBehaviour
     [SerializeField] public bool isMoving;
     [SerializeField] public bool isMatched;
     [SerializeField] public CandyType candyType;
+    [SerializeField] public bool isSpecial;
+    [SerializeField] public SpecialCandyEffect specialEffect;
 
     private SpriteRenderer spriteRenderer;
 
@@ -77,13 +89,29 @@ public class Candy : MonoBehaviour
         }
     }
 
-    public void Init(int xIndex, int yIndex, CandyType type)
+    public void Init(int xIndex, int yIndex, CandyType type, bool isSpecial = false, SpecialCandyEffect effect = SpecialCandyEffect.None)
     {
         this.xIndex = xIndex;
         this.yIndex = yIndex;
         this.candyType = type;
+        this.isSpecial = isSpecial;
+        this.specialEffect = effect;
         isMatched = false;
         isMoving = false;
+
+        // Thay đổi màu sắc hoặc hiệu ứng cho candy đặc biệt nếu cần
+        if (isSpecial && spriteRenderer != null)
+        {
+            // Thay đổi màu dựa trên loại đặc biệt
+            if (effect == SpecialCandyEffect.ClearRow)
+            {
+                spriteRenderer.color = new Color(1f, 0.7f, 0.7f, 1f); // Màu đặc biệt cho candy xóa hàng
+            }
+            else if (effect == SpecialCandyEffect.ClearColumn)
+            {
+                spriteRenderer.color = new Color(0.7f, 0.7f, 1f, 1f); // Màu đặc biệt cho candy xóa cột
+            }
+        }
     }
 
     public void setIndicies(int xIndex, int yIndex)
@@ -124,7 +152,17 @@ public class Candy : MonoBehaviour
     {
         if (spriteRenderer != null)
         {
-            spriteRenderer.color = selected ? new Color(1f, 1f, 1f, 1f) : Color.white; // Highlight hoặc trở về bình thường
+            // Không thay đổi màu nếu là candy đặc biệt
+            if (!isSpecial)
+            {
+                spriteRenderer.color = selected ? new Color(1f, 1f, 1f, 0.7f) : Color.white; // Highlight hoặc trở về bình thường
+            }
+            else
+            {
+                // Chỉ thay đổi alpha cho candy đặc biệt khi được chọn
+                Color specialColor = spriteRenderer.color;
+                spriteRenderer.color = selected ? new Color(specialColor.r, specialColor.g, specialColor.b, 0.7f) : specialColor;
+            }
         }
         Debug.Log($"Candy {candyType} at [{xIndex},{yIndex}] {(selected ? "selected" : "deselected")}");
     }
@@ -151,5 +189,22 @@ public class Candy : MonoBehaviour
 
         float distance = Vector3.Distance(transform.position, expectedPosition);
         return distance <= 0.1f;
+    }
+
+    // Phương thức để xử lý hiệu ứng của candy đặc biệt khi được kích hoạt
+    public void ActivateSpecialEffect()
+    {
+        if (!isSpecial) return;
+
+        if (specialEffect == SpecialCandyEffect.ClearRow)
+        {
+            Debug.Log($"Activating row clear effect at row {yIndex}");
+            CandyBoard.instance.ClearRow(yIndex);
+        }
+        else if (specialEffect == SpecialCandyEffect.ClearColumn)
+        {
+            Debug.Log($"Activating column clear effect at column {xIndex}");
+            CandyBoard.instance.ClearColumn(xIndex);
+        }
     }
 }
