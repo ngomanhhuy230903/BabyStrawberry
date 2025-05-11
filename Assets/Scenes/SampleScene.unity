@@ -1545,7 +1545,7 @@ GameObject:
   - component: {fileID: 876688499}
   - component: {fileID: 876688498}
   m_Layer: 0
-  m_Name: Position Board
+  m_Name: Candy Board
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -1567,14 +1567,14 @@ MonoBehaviour:
   boardHeight: 8
   spaceingX: 0
   spaceingY: 0
-  spacingScale: 1.75
+  spacingScale: 1.1
   candyPrefab:
-  - {fileID: 5850356763111794963, guid: f4208941783e2f045b86a9167f930aab, type: 3}
-  - {fileID: 5937152101282392489, guid: d664bdbefd97fab46937f99a8aec6d59, type: 3}
-  - {fileID: 3074768587222930122, guid: 2bb01f6e9a54e5246bd71a2b1f76c759, type: 3}
-  - {fileID: 6611521531083608616, guid: d65d7bf506c88794bbb9b9f800e5848c, type: 3}
-  - {fileID: 5522963162319307860, guid: 1a3e3d3b560fa194a9d996aff7587253, type: 3}
   - {fileID: 3939527605857352177, guid: 38092738483cdeb4c9b5c549d19b6045, type: 3}
+  - {fileID: 5522963162319307860, guid: 1a3e3d3b560fa194a9d996aff7587253, type: 3}
+  - {fileID: 6611521531083608616, guid: d65d7bf506c88794bbb9b9f800e5848c, type: 3}
+  - {fileID: 3074768587222930122, guid: 2bb01f6e9a54e5246bd71a2b1f76c759, type: 3}
+  - {fileID: 5937152101282392489, guid: d664bdbefd97fab46937f99a8aec6d59, type: 3}
+  - {fileID: 5850356763111794963, guid: f4208941783e2f045b86a9167f930aab, type: 3}
   candyBoardGO: {fileID: 876688497}
   candyToDestroy: []
   candyParent: {fileID: 103663256}
@@ -1591,6 +1591,20 @@ MonoBehaviour:
     - row: 000000000000
     - row: 000000000000
     - row: 000000000000
+  rowClearerPrefabs:
+  - {fileID: 667928789011074661, guid: 48c8d6ad80f291e4dad187bae6d34cd2, type: 3}
+  - {fileID: 8821945798723669960, guid: cb9cd5e1d43df7f4fa85d2223bb27867, type: 3}
+  - {fileID: 7828427411279610577, guid: 5652c5418de1dfb42b201fc0388eb687, type: 3}
+  - {fileID: 262565675077051773, guid: 40f4050f74b50704fbd3a9dcbf679287, type: 3}
+  - {fileID: 8469826812507539860, guid: 65ad50a88966a7946b38d55e225d0825, type: 3}
+  - {fileID: 7973374715894173728, guid: 04a94759c1c16464baf69f4fdb36d7ff, type: 3}
+  columnClearerPrefabs:
+  - {fileID: 3005469920534702778, guid: 9578149229c81ab44aafaa22b39d7a9e, type: 3}
+  - {fileID: 7799197784236851427, guid: 34b615cf33e25554fa8e152b3a107a97, type: 3}
+  - {fileID: 7507596336949151529, guid: c86cb65d50b401e4d91f97c6470ec2c7, type: 3}
+  - {fileID: 2561166017940754981, guid: c3668dcbd892bbc458115959082a8a23, type: 3}
+  - {fileID: 6168047549095524911, guid: 90435b91711436448a066b5714f74893, type: 3}
+  - {fileID: 6708646000725403234, guid: e514dbad80043b646a0d64b5d4f23534, type: 3}
 --- !u!4 &876688499
 Transform:
   m_ObjectHideFlags: 0
@@ -2299,8 +2313,8 @@ MonoBehaviour:
   backgroundPanel: {fileID: 189053057}
   victoryPanel: {fileID: 1364082479}
   defeatPanel: {fileID: 293541507}
-  goal: 0
-  moves: 0
+  goal: 100
+  moves: 100
   scores: 0
   isGameOver: 0
   pointText: {fileID: 1325709772}

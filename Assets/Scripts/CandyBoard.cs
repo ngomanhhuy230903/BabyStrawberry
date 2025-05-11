@@ -1,6 +1,5 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
-using Unity.VisualScripting;
 using UnityEngine;
 
 public class CandyBoard : MonoBehaviour
@@ -20,11 +19,37 @@ public class CandyBoard : MonoBehaviour
     [SerializeField] List<Candy> candyToRemove = new List<Candy>();
     public ArrayLayout arrayLayout;
     public static CandyBoard instance;
-    private bool isInitializingBoard = false; // Flag to prevent recursive board initialization
+    private bool isInitializingBoard = false;
+    public GameObject[] rowClearerPrefabs; // Prefabs cho LongHorizontal (xóa hàng)
+    public GameObject[] columnClearerPrefabs; // Prefabs cho LongVertical (xóa cột)
 
     public void Awake()
     {
         instance = this;
+        ValidateSpecialPrefabs();
+    }
+
+    private void ValidateSpecialPrefabs()
+    {
+        if (rowClearerPrefabs == null || rowClearerPrefabs.Length != candyPrefab.Length)
+        {
+            Debug.LogError("rowClearerPrefabs array is null or does not match candyPrefab length. Please assign prefabs for all candy types in the Inspector.");
+        }
+        if (columnClearerPrefabs == null || columnClearerPrefabs.Length != candyPrefab.Length)
+        {
+            Debug.LogError("columnClearerPrefabs array is null or does not match candyPrefab length. Please assign prefabs for all candy types in the Inspector.");
+        }
+        for (int i = 0; i < candyPrefab.Length; i++)
+        {
+            if (rowClearerPrefabs[i] == null)
+            {
+                Debug.LogError($"rowClearerPrefabs[{i}] is null. Please assign a valid prefab for candy type {(CandyType)i}.");
+            }
+            if (columnClearerPrefabs[i] == null)
+            {
+                Debug.LogError($"columnClearerPrefabs[{i}] is null. Please assign a valid prefab for candy type {(CandyType)i}.");
+            }
+        }
     }
 
     public void Start()
@@ -37,7 +62,7 @@ public class CandyBoard : MonoBehaviour
         if (Input.GetMouseButtonDown(0))
         {
             Vector2 mousePos = Camera.main.ScreenToWorldPoint(Input.mousePosition);
-            RaycastHit2D hit = Physics2D.Raycast(mousePos, Vector2.zero);
+            RaycastHit2D hit = Physics2D.Raycast(mousePos, Vector2.zero, Mathf.Infinity, LayerMask.GetMask("Candy"));
             if (hit.collider != null)
             {
                 Candy candy = hit.collider.gameObject.GetComponent<Candy>();
@@ -46,6 +71,14 @@ public class CandyBoard : MonoBehaviour
                     Debug.Log($"Click candy at position [{candy.xIndex},{candy.yIndex}], type: {candy.candyType}");
                     SelectCandy(candy);
                 }
+                else
+                {
+                    Debug.LogWarning($"No Candy component found on hit object: {hit.collider.gameObject.name}");
+                }
+            }
+            else
+            {
+                Debug.Log("Raycast hit nothing");
             }
         }
         if (Input.GetKeyDown(KeyCode.Space))
@@ -59,7 +92,6 @@ public class CandyBoard : MonoBehaviour
             else
                 Debug.Log("No candy selected");
         }
-        // Check for possible moves periodically if needed
         if (Input.GetKeyDown(KeyCode.M))
         {
             bool hasPossibleMatches = CheckForPossibleMatches();
@@ -82,8 +114,7 @@ public class CandyBoard : MonoBehaviour
     private IEnumerator InitializeBoardCoroutine()
     {
         Debug.Log("Initializing board...");
-
-        // Fix Issue 2: Ensure complete board destruction
+        selectedCandy = null;
         ClearEntireBoard();
 
         candyBoard = new Node[boardWidth, boardHeight];
@@ -142,13 +173,9 @@ public class CandyBoard : MonoBehaviour
             }
         }
 
-        // Create the board ensuring no initial matches
         CreateBoardWithoutMatches();
-
-        // Check the board after creation
         yield return new WaitForSeconds(0.5f);
 
-        // Check for initial matches and process them
         if (CheckBoard())
         {
             Debug.Log("Initial matches found, processing...");
@@ -156,7 +183,6 @@ public class CandyBoard : MonoBehaviour
             yield return new WaitForSeconds(0.5f);
         }
 
-        // Verify if there are possible matches on the board
         if (!CheckForPossibleMatches())
         {
             Debug.Log("No possible matches on the board, reinitializing...");
@@ -182,11 +208,9 @@ public class CandyBoard : MonoBehaviour
                 }
                 else
                 {
-                    // Prevent immediate matches when creating the board
                     List<int> availableTypes = GetAvailableCandyTypes(x, y);
                     if (availableTypes.Count == 0)
                     {
-                        // If no valid types (shouldn't happen normally), use any type
                         availableTypes = new List<int>();
                         for (int i = 0; i < candyPrefab.Length; i++)
                         {
@@ -195,7 +219,6 @@ public class CandyBoard : MonoBehaviour
                     }
 
                     int randomIndex = availableTypes[Random.Range(0, availableTypes.Count)];
-
                     Debug.Log($"Instantiating candy at [{x},{y}] with prefab: {candyPrefab[randomIndex].name}");
                     GameObject candy = Instantiate(candyPrefab[randomIndex], position, Quaternion.identity);
                     candy.transform.SetParent(candyParent.transform);
@@ -220,7 +243,6 @@ public class CandyBoard : MonoBehaviour
         }
     }
 
-    // Get available candy types that won't create an immediate match at position (x,y)
     private List<int> GetAvailableCandyTypes(int x, int y)
     {
         List<int> availableTypes = new List<int>();
@@ -229,7 +251,6 @@ public class CandyBoard : MonoBehaviour
             availableTypes.Add(i);
         }
 
-        // Check horizontal matches (left)
         if (x >= 2 &&
             candyBoard[x - 1, y] != null && candyBoard[x - 1, y].isUsable && candyBoard[x - 1, y].candy != null &&
             candyBoard[x - 2, y] != null && candyBoard[x - 2, y].isUsable && candyBoard[x - 2, y].candy != null)
@@ -247,7 +268,6 @@ public class CandyBoard : MonoBehaviour
             }
         }
 
-        // Check vertical matches (down)
         if (y >= 2 &&
             candyBoard[x, y - 1] != null && candyBoard[x, y - 1].isUsable && candyBoard[x, y - 1].candy != null &&
             candyBoard[x, y - 2] != null && candyBoard[x, y - 2].isUsable && candyBoard[x, y - 2].candy != null)
@@ -270,7 +290,7 @@ public class CandyBoard : MonoBehaviour
 
     private void ClearEntireBoard()
     {
-        // First destroy any existing candies
+        Debug.Log($"ClearEntireBoard: selectedCandy before clear = {(selectedCandy == null ? "null" : $"[{selectedCandy.xIndex},{selectedCandy.yIndex}]")}");
         if (candyToDestroy != null && candyToDestroy.Count > 0)
         {
             foreach (GameObject candy in candyToDestroy)
@@ -283,22 +303,22 @@ public class CandyBoard : MonoBehaviour
             candyToDestroy.Clear();
         }
 
-        // Also check for any other candy children in the parent that might have been missed
         if (candyParent != null)
         {
             foreach (Transform child in candyParent.transform)
             {
                 if (child.gameObject != null && child.gameObject != candyParent)
                 {
+                    Debug.Log($"Destroying candy: {child.gameObject.name} at position {child.position}");
                     Destroy(child.gameObject);
                 }
             }
         }
 
-        // Reset other relevant variables
         selectedCandy = null;
         isProcessingMove = false;
         candyToRemove.Clear();
+        Debug.Log("ClearEntireBoard: selectedCandy set to null");
     }
 
     private void DestroyPosition()
@@ -313,7 +333,6 @@ public class CandyBoard : MonoBehaviour
         }
     }
 
-    // Check if there are any potential matches on the board
     public bool CheckForPossibleMatches()
     {
         if (GameManager.instance.isGameOver)
@@ -321,7 +340,6 @@ public class CandyBoard : MonoBehaviour
             return false;
         }
 
-        // Check horizontal swaps
         for (int y = 0; y < boardHeight; y++)
         {
             for (int x = 0; x < boardWidth - 1; x++)
@@ -329,12 +347,10 @@ public class CandyBoard : MonoBehaviour
                 if (candyBoard[x, y].isUsable && candyBoard[x + 1, y].isUsable &&
                     candyBoard[x, y].candy != null && candyBoard[x + 1, y].candy != null)
                 {
-                    // Temporarily swap
                     GameObject temp = candyBoard[x, y].candy;
                     candyBoard[x, y].candy = candyBoard[x + 1, y].candy;
                     candyBoard[x + 1, y].candy = temp;
 
-                    // Check if this creates a match
                     Candy candy1 = candyBoard[x, y].candy.GetComponent<Candy>();
                     Candy candy2 = candyBoard[x + 1, y].candy.GetComponent<Candy>();
 
@@ -347,8 +363,6 @@ public class CandyBoard : MonoBehaviour
                     candy2.setIndicies(x + 1, y);
 
                     bool hasMatch = false;
-
-                    // Check if the swap would create a match
                     MatchResult match1 = IsConnected(candy1);
                     MatchResult match2 = IsConnected(candy2);
 
@@ -358,11 +372,9 @@ public class CandyBoard : MonoBehaviour
                         hasMatch = true;
                     }
 
-                    // Swap back
                     candyBoard[x + 1, y].candy = candyBoard[x, y].candy;
                     candyBoard[x, y].candy = temp;
 
-                    // Reset indices
                     candy1.setIndicies(tempX1, tempY1);
                     candy2.setIndicies(tempX2, tempY2);
 
@@ -375,7 +387,6 @@ public class CandyBoard : MonoBehaviour
             }
         }
 
-        // Check vertical swaps
         for (int x = 0; x < boardWidth; x++)
         {
             for (int y = 0; y < boardHeight - 1; y++)
@@ -383,12 +394,10 @@ public class CandyBoard : MonoBehaviour
                 if (candyBoard[x, y].isUsable && candyBoard[x, y + 1].isUsable &&
                     candyBoard[x, y].candy != null && candyBoard[x, y + 1].candy != null)
                 {
-                    // Temporarily swap
                     GameObject temp = candyBoard[x, y].candy;
                     candyBoard[x, y].candy = candyBoard[x, y + 1].candy;
                     candyBoard[x, y + 1].candy = temp;
 
-                    // Check if this creates a match
                     Candy candy1 = candyBoard[x, y].candy.GetComponent<Candy>();
                     Candy candy2 = candyBoard[x, y + 1].candy.GetComponent<Candy>();
 
@@ -401,8 +410,6 @@ public class CandyBoard : MonoBehaviour
                     candy2.setIndicies(x, y + 1);
 
                     bool hasMatch = false;
-
-                    // Check if the swap would create a match
                     MatchResult match1 = IsConnected(candy1);
                     MatchResult match2 = IsConnected(candy2);
 
@@ -412,11 +419,9 @@ public class CandyBoard : MonoBehaviour
                         hasMatch = true;
                     }
 
-                    // Swap back
                     candyBoard[x, y + 1].candy = candyBoard[x, y].candy;
                     candyBoard[x, y].candy = temp;
 
-                    // Reset indices
                     candy1.setIndicies(tempX1, tempY1);
                     candy2.setIndicies(tempX2, tempY2);
 
@@ -508,7 +513,6 @@ public class CandyBoard : MonoBehaviour
         }
         else
         {
-            // Check if there are possible matches after cascade is complete
             yield return new WaitForSeconds(0.2f);
             if (!CheckForPossibleMatches() && !isInitializingBoard)
             {
@@ -518,50 +522,176 @@ public class CandyBoard : MonoBehaviour
         }
     }
 
-    #region Cascading Candys
     private void RemoveAndRefill(List<Candy> candyToRemove)
     {
-        // First mark positions that need refilling
-        HashSet<int> columnsToRefill = new HashSet<int>();
+        CreateSpecialCandyIfMatch(candyToRemove);
 
-        // Remove matched candies
+        HashSet<int> columnsToRefill = new HashSet<int>();
         foreach (Candy candy in candyToRemove)
         {
             int xIndex = candy.xIndex;
             int yIndex = candy.yIndex;
-
-            // Add column to refill set
             columnsToRefill.Add(xIndex);
-
-            // Destroy candy and clear board position
             Destroy(candy.gameObject);
             candyBoard[xIndex, yIndex] = new Node(true, null);
         }
 
         foreach (int x in columnsToRefill)
         {
-            // Collapse column first - move all remaining candies down to fill gaps
             CollapseColumn(x);
-
-            // Then fill empty spaces at the top with new candies
             FillEmptySpacesInColumn(x);
         }
 
         CheckBoard();
         Debug.Log("Refill complete");
     }
+
+    private void CreateSpecialCandyIfMatch(List<Candy> matchedCandies)
+    {
+        if (matchedCandies == null || matchedCandies.Count < 4)
+            return;
+
+        bool isHorizontalMatch = true;
+        int firstY = matchedCandies[0].yIndex;
+        foreach (Candy candy in matchedCandies)
+        {
+            if (matchedCandies.Contains(candy))
+                continue;
+            if (candy.yIndex != firstY)
+            {
+                isHorizontalMatch = false;
+                break;
+            }
+        }
+
+        bool isVerticalMatch = true;
+        int firstX = matchedCandies[0].xIndex;
+        foreach (Candy candy in matchedCandies)
+        {
+            if (matchedCandies.Contains(candy))
+                continue;
+            if (candy.xIndex != firstX)
+            {
+                isVerticalMatch = false;
+                break;
+            }
+        }
+
+        if (!isHorizontalMatch && !isVerticalMatch)
+            return;
+
+        Candy centerCandy = matchedCandies[matchedCandies.Count / 2];
+        int specialX = centerCandy.xIndex;
+        int specialY = centerCandy.yIndex;
+        CandyType originalType = centerCandy.candyType;
+
+        matchedCandies.Remove(centerCandy);
+
+        if (isHorizontalMatch)
+        {
+            CreateRowClearerCandy(specialX, specialY, originalType);
+        }
+        else if (isVerticalMatch)
+        {
+            CreateColumnClearerCandy(specialX, specialY, originalType);
+        }
+    }
+
+    private void CreateRowClearerCandy(int x, int y, CandyType originalType)
+    {
+        GameObject specialCandyPrefab = GetSpecialCandyPrefab(originalType, true);
+        if (specialCandyPrefab == null)
+        {
+            Debug.LogError($"No special candy prefab found for type {originalType} (row clearer)");
+            return;
+        }
+
+        Vector3 position = new Vector3(
+            (x - spaceingX) * spacingScale,
+            (y - spaceingY) * spacingScale,
+            0
+        );
+
+        GameObject specialCandy = Instantiate(specialCandyPrefab, position, Quaternion.identity);
+        specialCandy.transform.SetParent(candyParent.transform);
+
+        Candy candyComponent = specialCandy.GetComponent<Candy>();
+        candyComponent.setIndicies(x, y);
+        candyComponent.Init(x, y, originalType, true, SpecialCandyEffect.ClearRow);
+
+        if (candyBoard[x, y].candy != null)
+        {
+            Destroy(candyBoard[x, y].candy);
+        }
+        candyBoard[x, y] = new Node(true, specialCandy);
+        candyToDestroy.Add(specialCandy);
+
+        Debug.Log($"Created LongHorizontal candy at [{x},{y}] with type {originalType}");
+    }
+
+    private void CreateColumnClearerCandy(int x, int y, CandyType originalType)
+    {
+        GameObject specialCandyPrefab = GetSpecialCandyPrefab(originalType, false);
+        if (specialCandyPrefab == null)
+        {
+            Debug.LogError($"No special candy prefab found for type {originalType} (column clearer)");
+            return;
+        }
+
+        Vector3 position = new Vector3(
+            (x - spaceingX) * spacingScale,
+            (y - spaceingY) * spacingScale,
+            0
+        );
+
+        GameObject specialCandy = Instantiate(specialCandyPrefab, position, Quaternion.identity);
+        specialCandy.transform.SetParent(candyParent.transform);
+
+        Candy candyComponent = specialCandy.GetComponent<Candy>();
+        candyComponent.setIndicies(x, y);
+        candyComponent.Init(x, y, originalType, true, SpecialCandyEffect.ClearColumn);
+
+        if (candyBoard[x, y].candy != null)
+        {
+            Destroy(candyBoard[x, y].candy);
+        }
+        candyBoard[x, y] = new Node(true, specialCandy);
+        candyToDestroy.Add(specialCandy);
+
+        Debug.Log($"Created LongVertical candy at [{x},{y}] with type {originalType}");
+    }
+
+    private GameObject GetSpecialCandyPrefab(CandyType type, bool isRowClearer)
+    {
+        if (isRowClearer)
+        {
+            if (rowClearerPrefabs != null && rowClearerPrefabs.Length > (int)type && rowClearerPrefabs[(int)type] != null)
+            {
+                return rowClearerPrefabs[(int)type];
+            }
+        }
+        else
+        {
+            if (columnClearerPrefabs != null && columnClearerPrefabs.Length > (int)type && columnClearerPrefabs[(int)type] != null)
+            {
+                return columnClearerPrefabs[(int)type];
+            }
+        }
+
+        Debug.LogError($"No special candy prefab found for {type}!");
+        return null;
+    }
+
     private void CollapseColumn(int x)
     {
         for (int y = 0; y < boardHeight - 1; y++)
         {
-            // If current position is empty and usable, look for candy above to move down
             if (candyBoard[x, y].isUsable && candyBoard[x, y].candy == null)
             {
                 for (int aboveY = y + 1; aboveY < boardHeight; aboveY++)
                 {
                     if (candyBoard[x, aboveY].isUsable && candyBoard[x, aboveY].candy != null)
                     {
-                        // Found candy above, move it down to current position
                         Candy candyToMove = candyBoard[x, aboveY].candy.GetComponent<Candy>();
                         Vector3 targetPos = new Vector3(
                             (x - spaceingX) * spacingScale,
@@ -573,7 +703,6 @@ public class CandyBoard : MonoBehaviour
                         candyToMove.MoveToTarget(targetPos);
                         candyToMove.setIndicies(x, y);
 
-                        // Update board references
                         candyBoard[x, y] = candyBoard[x, aboveY];
                         candyBoard[x, aboveY] = new Node(true, null);
                         break;
@@ -583,18 +712,15 @@ public class CandyBoard : MonoBehaviour
         }
     }
 
-    // Fill empty spaces at the top of column
     private void FillEmptySpacesInColumn(int x)
     {
         for (int y = 0; y < boardHeight; y++)
         {
             if (candyBoard[x, y].isUsable && candyBoard[x, y].candy == null)
             {
-                // Spawn new candy for this empty position
                 List<int> availableTypes = GetAvailableCandyTypes(x, y);
                 if (availableTypes.Count == 0)
                 {
-                    // If no valid types, use any type
                     availableTypes = new List<int>();
                     for (int i = 0; i < candyPrefab.Length; i++)
                     {
@@ -606,7 +732,7 @@ public class CandyBoard : MonoBehaviour
 
                 Vector3 spawnPos = new Vector3(
                     (x - spaceingX) * spacingScale,
-                    (boardHeight - spaceingY + y) * spacingScale, // Spawn above the visible board
+                    (boardHeight - spaceingY + y) * spacingScale,
                     0
                 );
 
@@ -630,7 +756,6 @@ public class CandyBoard : MonoBehaviour
             }
         }
     }
-    #endregion
 
     private MatchResult SuperMatch(MatchResult matchCandy)
     {
@@ -681,7 +806,7 @@ public class CandyBoard : MonoBehaviour
             Debug.Log("I have a normal horizontal match,the color is match is: " + connectionCandys[0].candyType);
             return new MatchResult() { connectionCandys = connectionCandys, direction = MatchDirection.Horizontal };
         }
-        else if (connectionCandys.Count > 3)
+        else if (connectionCandys.Count >= 4)
         {
             Debug.Log("I have a long horizontal match,the color is match is: " + connectionCandys[0].candyType);
             return new MatchResult() { connectionCandys = connectionCandys, direction = MatchDirection.LongHorizontal };
@@ -695,7 +820,7 @@ public class CandyBoard : MonoBehaviour
             Debug.Log("I have a normal Vertical match,the color is match is: " + connectionCandys[0].candyType);
             return new MatchResult() { connectionCandys = connectionCandys, direction = MatchDirection.Vertical };
         }
-        else if (connectionCandys.Count > 3)
+        else if (connectionCandys.Count >= 4)
         {
             Debug.Log("I have a long vertical match,the color is match is: " + connectionCandys[0].candyType);
             return new MatchResult() { connectionCandys = connectionCandys, direction = MatchDirection.LongVertical };
@@ -734,7 +859,50 @@ public class CandyBoard : MonoBehaviour
         }
     }
 
-    #region Swapping candys
+    public void ClearRow(int rowIndex)
+    {
+        List<Candy> candiesToRemove = new List<Candy>();
+        for (int x = 0; x < boardWidth; x++)
+        {
+            if (candyBoard[x, rowIndex].isUsable && candyBoard[x, rowIndex].candy != null)
+            {
+                Candy candy = candyBoard[x, rowIndex].candy.GetComponent<Candy>();
+                if (candy != null)
+                {
+                    candiesToRemove.Add(candy);
+                }
+            }
+        }
+
+        if (candiesToRemove.Count > 0)
+        {
+            RemoveAndRefill(candiesToRemove);
+            GameManager.instance.ProcessTurn(candiesToRemove.Count, true);
+        }
+    }
+
+    public void ClearColumn(int columnIndex)
+    {
+        List<Candy> candiesToRemove = new List<Candy>();
+        for (int y = 0; y < boardHeight; y++)
+        {
+            if (candyBoard[columnIndex, y].isUsable && candyBoard[columnIndex, y].candy != null)
+            {
+                Candy candy = candyBoard[columnIndex, y].candy.GetComponent<Candy>();
+                if (candy != null)
+                {
+                    candiesToRemove.Add(candy);
+                }
+            }
+        }
+
+        if (candiesToRemove.Count > 0)
+        {
+            RemoveAndRefill(candiesToRemove);
+            GameManager.instance.ProcessTurn(candiesToRemove.Count, true);
+        }
+    }
+
     public void SelectCandy(Candy candy)
     {
         if (candy == null)
@@ -742,8 +910,8 @@ public class CandyBoard : MonoBehaviour
             Debug.LogError("Cannot select null candy");
             return;
         }
-        Debug.Log($"SelectCandy called with candy type {candy.candyType} at [{candy.xIndex},{candy.yIndex}]");
-        Debug.Log($"Current selectedCandy: {(selectedCandy == null ? "null" : selectedCandy.candyType.ToString() + " at [" + selectedCandy.xIndex + "," + selectedCandy.yIndex + "]")}");
+        Debug.Log($"SelectCandy: Input candy = {candy.candyType} at [{candy.xIndex},{candy.yIndex}]");
+        Debug.Log($"SelectCandy: Current selectedCandy = {(selectedCandy == null ? "null" : $"{selectedCandy.candyType} at [{selectedCandy.xIndex},{selectedCandy.yIndex}]")}");
         if (isProcessingMove)
         {
             Debug.Log("Still processing previous move");
@@ -824,8 +992,11 @@ public class CandyBoard : MonoBehaviour
             isProcessingMove = false;
             yield break;
         }
+
         yield return new WaitForSeconds(0.3f);
         bool hasMatch = false;
+        bool hasSpecialCandy = firstCandy.isSpecial || secondCandy.isSpecial;
+
         try
         {
             hasMatch = CheckBoard();
@@ -835,11 +1006,33 @@ public class CandyBoard : MonoBehaviour
         {
             Debug.LogError($"Error in CheckBoard: {e.Message}\nStackTrace: {e.StackTrace}");
         }
+
         if (hasMatch)
         {
             Debug.Log("Match found! Processing matches...");
             StartCoroutine(ProcessTurnOnMatchedBoard(true));
             yield return new WaitForSeconds(0.5f);
+        }
+        else if (hasSpecialCandy)
+        {
+            Debug.Log("No match found, but special candy present. Checking for special activation...");
+            MatchResult match1 = IsConnected(firstCandy);
+            MatchResult match2 = IsConnected(secondCandy);
+            bool validSpecialMatch = (match1.connectionCandys != null && match1.connectionCandys.Count >= 3) ||
+                                    (match2.connectionCandys != null && match2.connectionCandys.Count >= 3);
+
+            if (validSpecialMatch)
+            {
+                if (firstCandy.isSpecial)
+                    firstCandy.ActivateSpecialEffect();
+                if (secondCandy.isSpecial)
+                    secondCandy.ActivateSpecialEffect();
+            }
+            else
+            {
+                Debug.Log("No valid match for special candy, swapping back");
+                DoSwap(firstCandy, secondCandy);
+            }
         }
         else
         {
@@ -847,7 +1040,6 @@ public class CandyBoard : MonoBehaviour
             DoSwap(firstCandy, secondCandy);
             yield return new WaitForSeconds(0.3f);
 
-            // Check if there are any valid moves after the swap back
             if (!CheckForPossibleMatches())
             {
                 Debug.Log("No possible matches remain after failed swap, reinitializing board...");
@@ -856,6 +1048,7 @@ public class CandyBoard : MonoBehaviour
             }
         }
         isProcessingMove = false;
+        selectedCandy = null;
         Debug.Log("=== ProcessMatches END ===");
     }
 
@@ -866,7 +1059,6 @@ public class CandyBoard : MonoBehaviour
         Debug.Log($"IsAdjacent check: [{firstCandy.xIndex},{firstCandy.yIndex}] to [{secondCandy.xIndex},{secondCandy.yIndex}] = {adjacent}");
         return adjacent;
     }
-    #endregion
 }
 
 public class MatchResult
