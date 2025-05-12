@@ -12,7 +12,7 @@ GameObject:
   - component: {fileID: 8647580311920654812}
   - component: {fileID: 8495349649002999222}
   - component: {fileID: -3401045350045316242}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: Purple Column Clearer candy
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -29,7 +29,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 0.55, y: 0.55, z: 0.55}
+  m_LocalScale: {x: 0.5, y: 0.5, z: 0.5}
   m_ConstrainProportionsScale: 1
   m_Children: []
   m_Father: {fileID: 0}
@@ -103,7 +103,7 @@ MonoBehaviour:
   isMoving: 0
   isMatched: 0
   candyType: 3
-  isSpecial: 0
+  isSpecial: 1
   specialEffect: 2
 --- !u!61 &-3401045350045316242
 BoxCollider2D:

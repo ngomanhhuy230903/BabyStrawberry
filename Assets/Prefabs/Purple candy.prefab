@@ -12,8 +12,7 @@ GameObject:
   - component: {fileID: 6411363601230942574}
   - component: {fileID: 8312769889753908676}
   - component: {fileID: 7161029062365878554}
-  - component: {fileID: -560311363446952756}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: Purple candy
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -30,7 +29,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 5.23, y: 0, z: 0}
-  m_LocalScale: {x: 0.55, y: 0.55, z: 0.55}
+  m_LocalScale: {x: 0.5, y: 0.5, z: 0.5}
   m_ConstrainProportionsScale: 1
   m_Children: []
   m_Father: {fileID: 0}
@@ -151,22 +150,3 @@ BoxCollider2D:
   serializedVersion: 2
   m_Size: {x: 1.5474305, y: 1.6582637}
   m_EdgeRadius: 0
---- !u!114 &-560311363446952756
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 3074768587222930122}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 5d898f693e104c44eb384cb7d4241631, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  xIndex: 0
-  yIndex: 0
-  isMoving: 0
-  isMatched: 0
-  candyType: 0
-  isSpecial: 0
-  specialEffect: 0

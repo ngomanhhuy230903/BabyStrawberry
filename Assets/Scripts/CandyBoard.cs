@@ -20,8 +20,8 @@ public class CandyBoard : MonoBehaviour
     public ArrayLayout arrayLayout;
     public static CandyBoard instance;
     private bool isInitializingBoard = false;
-    public GameObject[] rowClearerPrefabs; // Prefabs cho LongHorizontal (xóa hàng)
-    public GameObject[] columnClearerPrefabs; // Prefabs cho LongVertical (xóa cột)
+    public GameObject[] rowClearerPrefabs;
+    public GameObject[] columnClearerPrefabs;
 
     public void Awake()
     {
@@ -33,21 +33,21 @@ public class CandyBoard : MonoBehaviour
     {
         if (rowClearerPrefabs == null || rowClearerPrefabs.Length != candyPrefab.Length)
         {
-            Debug.LogError("rowClearerPrefabs array is null or does not match candyPrefab length. Please assign prefabs for all candy types in the Inspector.");
+            Debug.LogError("rowClearerPrefabs array is null or does not match candyPrefab length.");
         }
         if (columnClearerPrefabs == null || columnClearerPrefabs.Length != candyPrefab.Length)
         {
-            Debug.LogError("columnClearerPrefabs array is null or does not match candyPrefab length. Please assign prefabs for all candy types in the Inspector.");
+            Debug.LogError("columnClearerPrefabs array is null or does not match candyPrefab length.");
         }
         for (int i = 0; i < candyPrefab.Length; i++)
         {
             if (rowClearerPrefabs[i] == null)
             {
-                Debug.LogError($"rowClearerPrefabs[{i}] is null. Please assign a valid prefab for candy type {(CandyType)i}.");
+                Debug.LogError($"rowClearerPrefabs[{i}] is null for candy type {(CandyType)i}.");
             }
             if (columnClearerPrefabs[i] == null)
             {
-                Debug.LogError($"columnClearerPrefabs[{i}] is null. Please assign a valid prefab for candy type {(CandyType)i}.");
+                Debug.LogError($"columnClearerPrefabs[{i}] is null for candy type {(CandyType)i}.");
             }
         }
     }
@@ -68,12 +68,12 @@ public class CandyBoard : MonoBehaviour
                 Candy candy = hit.collider.gameObject.GetComponent<Candy>();
                 if (candy != null && !isProcessingMove)
                 {
-                    Debug.Log($"Click candy at position [{candy.xIndex},{candy.yIndex}], type: {candy.candyType}");
+                    Debug.Log($"Clicked candy at [{candy.xIndex},{candy.yIndex}], type: {candy.candyType}, isSpecial: {candy.isSpecial}");
                     SelectCandy(candy);
                 }
                 else
                 {
-                    Debug.LogWarning($"No Candy component found on hit object: {hit.collider.gameObject.name}");
+                    Debug.LogWarning($"No Candy component on hit object: {hit.collider.gameObject.name}");
                 }
             }
             else
@@ -87,15 +87,11 @@ public class CandyBoard : MonoBehaviour
         }
         if (Input.GetKeyDown(KeyCode.S))
         {
-            if (selectedCandy != null)
-                Debug.Log($"Current selectedCandy: {selectedCandy.candyType} at [{selectedCandy.xIndex},{selectedCandy.yIndex}]");
-            else
-                Debug.Log("No candy selected");
+            Debug.Log($"Current selectedCandy: {(selectedCandy == null ? "null" : $"{selectedCandy.candyType} at [{selectedCandy.xIndex},{selectedCandy.yIndex}]")}");
         }
         if (Input.GetKeyDown(KeyCode.M))
         {
-            bool hasPossibleMatches = CheckForPossibleMatches();
-            Debug.Log($"Board has possible matches: {hasPossibleMatches}");
+            Debug.Log($"Board has possible matches: {CheckForPossibleMatches()}");
         }
     }
 
@@ -123,7 +119,7 @@ public class CandyBoard : MonoBehaviour
 
         if (candyPrefab == null || candyPrefab.Length == 0)
         {
-            Debug.LogError("candyBoard: candyPrefab array is null or empty. Please assign candy prefabs in the Inspector.");
+            Debug.LogError("candyPrefab array is null or empty.");
             isInitializingBoard = false;
             yield break;
         }
@@ -132,26 +128,26 @@ public class CandyBoard : MonoBehaviour
         {
             if (candyPrefab[i] == null)
             {
-                Debug.LogError($"candyBoard: candyPrefab[{i}] is null. Please assign a valid prefab in the Inspector.");
+                Debug.LogError($"candyPrefab[{i}] is null.");
                 isInitializingBoard = false;
                 yield break;
             }
             if (candyPrefab[i].GetComponent<Candy>() == null)
             {
-                Debug.LogError($"candyBoard: candyPrefab[{i}] is missing Candy component.");
+                Debug.LogError($"candyPrefab[{i}] is missing Candy component.");
                 isInitializingBoard = false;
                 yield break;
             }
             SpriteRenderer sr = candyPrefab[i].GetComponent<SpriteRenderer>();
             if (sr == null)
             {
-                Debug.LogError($"candyBoard: candyPrefab[{i}] is missing SpriteRenderer component.");
+                Debug.LogError($"candyPrefab[{i}] is missing SpriteRenderer component.");
                 isInitializingBoard = false;
                 yield break;
             }
             if (sr.sprite == null)
             {
-                Debug.LogError($"candyBoard: candyPrefab[{i}] has SpriteRenderer but no sprite assigned.");
+                Debug.LogError($"candyPrefab[{i}] has SpriteRenderer but no sprite assigned.");
                 isInitializingBoard = false;
                 yield break;
             }
@@ -159,7 +155,7 @@ public class CandyBoard : MonoBehaviour
 
         if (arrayLayout == null || arrayLayout.rows == null || arrayLayout.rows.Length != boardHeight)
         {
-            Debug.LogError("candyBoard: arrayLayout is null or has incorrect row count. Please configure ArrayLayout in the Inspector.");
+            Debug.LogError("arrayLayout is null or has incorrect row count.");
             isInitializingBoard = false;
             yield break;
         }
@@ -167,7 +163,7 @@ public class CandyBoard : MonoBehaviour
         {
             if (arrayLayout.rows[y].row == null || arrayLayout.rows[y].row.Length != boardWidth)
             {
-                Debug.LogError($"candyBoard: arrayLayout.rows[{y}].row is null or has incorrect length.");
+                Debug.LogError($"arrayLayout.rows[{y}].row is null or has incorrect length.");
                 isInitializingBoard = false;
                 yield break;
             }
@@ -219,7 +215,6 @@ public class CandyBoard : MonoBehaviour
                     }
 
                     int randomIndex = availableTypes[Random.Range(0, availableTypes.Count)];
-                    Debug.Log($"Instantiating candy at [{x},{y}] with prefab: {candyPrefab[randomIndex].name}");
                     GameObject candy = Instantiate(candyPrefab[randomIndex], position, Quaternion.identity);
                     candy.transform.SetParent(candyParent.transform);
                     if (candy == null)
@@ -230,7 +225,7 @@ public class CandyBoard : MonoBehaviour
                     Candy candyComponent = candy.GetComponent<Candy>();
                     if (candyComponent == null)
                     {
-                        Debug.LogError($"Candy at [{x},{y}] is missing Candy component after instantiation.");
+                        Debug.LogError($"Candy at [{x},{y}] is missing Candy component.");
                         Destroy(candy);
                         continue;
                     }
@@ -238,6 +233,7 @@ public class CandyBoard : MonoBehaviour
                     candyComponent.Init(x, y, (CandyType)randomIndex);
                     candyBoard[x, y] = new Node(true, candy);
                     candyToDestroy.Add(candy);
+                    Debug.Log($"Created candy at [{x},{y}] with type {candyComponent.candyType}, indices [{candyComponent.xIndex},{candyComponent.yIndex}]");
                 }
             }
         }
@@ -290,7 +286,7 @@ public class CandyBoard : MonoBehaviour
 
     private void ClearEntireBoard()
     {
-        Debug.Log($"ClearEntireBoard: selectedCandy before clear = {(selectedCandy == null ? "null" : $"[{selectedCandy.xIndex},{selectedCandy.yIndex}]")}");
+        Debug.Log($"ClearEntireBoard: selectedCandy = {(selectedCandy == null ? "null" : $"[{selectedCandy.xIndex},{selectedCandy.yIndex}]")}");
         if (candyToDestroy != null && candyToDestroy.Count > 0)
         {
             foreach (GameObject candy in candyToDestroy)
@@ -495,21 +491,31 @@ public class CandyBoard : MonoBehaviour
 
     public IEnumerator ProcessTurnOnMatchedBoard(bool subtractMoves)
     {
-        if (candyToRemove.Count == 0)
+        if (this.candyToRemove.Count == 0) // Use this.candyToRemove which is populated by CheckBoard
         {
+            isProcessingMove = false; // Ensure this is reset if no candies to remove
             yield break;
         }
 
-        foreach (Candy candy in candyToRemove)
+        // Create a copy of the initial matches for processing special candy creation logic
+        List<Candy> initialMatches = new List<Candy>(this.candyToRemove);
+
+        // RemoveAndRefill will now return all candies that were actually destroyed (initial + special effects)
+        HashSet<Candy> allDestroyedThisTurn = RemoveAndRefill(initialMatches);
+
+        if (allDestroyedThisTurn.Count > 0)
         {
-            candy.isMatched = false;
+            GameManager.instance.ProcessTurn(allDestroyedThisTurn.Count, subtractMoves);
         }
-        RemoveAndRefill(candyToRemove);
-        GameManager.instance.ProcessTurn(candyToRemove.Count, subtractMoves);
-        yield return new WaitForSeconds(0.4f);
-        if (CheckBoard())
+
+        // Clear the board's main list after processing
+        this.candyToRemove.Clear();
+
+        yield return new WaitForSeconds(0.4f); // Delay for animations and effects
+
+        if (CheckBoard()) // Check for new matches caused by refill
         {
-            StartCoroutine(ProcessTurnOnMatchedBoard(false));
+            StartCoroutine(ProcessTurnOnMatchedBoard(false)); // Process cascades without subtracting moves
         }
         else
         {
@@ -519,32 +525,127 @@ public class CandyBoard : MonoBehaviour
                 Debug.Log("No more possible matches after cascade, reinitializing board...");
                 InitializeBoard();
             }
+            isProcessingMove = false; // Processing finished
+            selectedCandy = null;
         }
     }
 
-    private void RemoveAndRefill(List<Candy> candyToRemove)
+    // Modified RemoveAndRefill to handle chained special activations and return all destroyed candies
+    private HashSet<Candy> RemoveAndRefill(List<Candy> initialMatches)
     {
-        CreateSpecialCandyIfMatch(candyToRemove);
+        HashSet<Candy> allCandiesToDestroySet = new HashSet<Candy>();
+        Queue<Candy> processQueue = new Queue<Candy>();
+        List<Candy> specialCandiesActivatedThisCycle = new List<Candy>(); // To prevent re-activation in the same cycle
 
-        HashSet<int> columnsToRefill = new HashSet<int>();
-        foreach (Candy candy in candyToRemove)
+        // Add initial matches to the queue and destruction set
+        foreach (Candy candy in initialMatches)
         {
-            int xIndex = candy.xIndex;
-            int yIndex = candy.yIndex;
-            columnsToRefill.Add(xIndex);
-            Destroy(candy.gameObject);
-            candyBoard[xIndex, yIndex] = new Node(true, null);
+            if (allCandiesToDestroySet.Add(candy)) // .Add returns true if the item was new to the set
+            {
+                processQueue.Enqueue(candy);
+                candy.isMatched = true; // Mark as matched
+            }
         }
 
+        while (processQueue.Count > 0)
+        {
+            Candy currentCandy = processQueue.Dequeue();
+
+            // Check if this candy is special and should trigger its effect
+            // It should trigger if:
+            // 1. It's special.
+            // 2. It's marked for destruction (i.e., it was part of a match or caught in another special's effect).
+            // 3. It hasn't already activated in this specific RemoveAndRefill cycle.
+            if (currentCandy.isSpecial && allCandiesToDestroySet.Contains(currentCandy) && !specialCandiesActivatedThisCycle.Contains(currentCandy))
+            {
+                Debug.Log($"Processing special effect for {currentCandy.candyType} at [{currentCandy.xIndex},{currentCandy.yIndex}]");
+                specialCandiesActivatedThisCycle.Add(currentCandy);
+                currentCandy.ActivateSpecialEffectAndPlayVisuals(); // Play visuals like flash and beams
+
+                List<Candy> newlyAffectedBySpecial = new List<Candy>();
+                if (currentCandy.specialEffect == SpecialCandyEffect.ClearRow)
+                {
+                    for (int x = 0; x < boardWidth; x++)
+                    {
+                        if (candyBoard[x, currentCandy.yIndex].isUsable && candyBoard[x, currentCandy.yIndex].candy != null)
+                        {
+                            Candy affectedCandy = candyBoard[x, currentCandy.yIndex].candy.GetComponent<Candy>();
+                            if (affectedCandy != null && allCandiesToDestroySet.Add(affectedCandy))
+                            {
+                                newlyAffectedBySpecial.Add(affectedCandy);
+                            }
+                        }
+                    }
+                }
+                else if (currentCandy.specialEffect == SpecialCandyEffect.ClearColumn)
+                {
+                    for (int y = 0; y < boardHeight; y++)
+                    {
+                        if (candyBoard[currentCandy.xIndex, y].isUsable && candyBoard[currentCandy.xIndex, y].candy != null)
+                        {
+                            Candy affectedCandy = candyBoard[currentCandy.xIndex, y].candy.GetComponent<Candy>();
+                            if (affectedCandy != null && allCandiesToDestroySet.Add(affectedCandy))
+                            {
+                                newlyAffectedBySpecial.Add(affectedCandy);
+                            }
+                        }
+                    }
+                }
+
+                // If these newly affected candies are also special, add them to the queue to process their effects
+                foreach (Candy newlyHitCandy in newlyAffectedBySpecial)
+                {
+                    newlyHitCandy.isMatched = true; // Mark for destruction
+                    if (newlyHitCandy.isSpecial && !processQueue.Contains(newlyHitCandy) && !specialCandiesActivatedThisCycle.Contains(newlyHitCandy))
+                    {
+                        processQueue.Enqueue(newlyHitCandy);
+                    }
+                }
+            }
+        }
+
+        // Create new special candies based on the original matches (e.g., 4-in-a-row)
+        // This should use the 'initialMatches' list, not 'allCandiesToDestroySet',
+        // to ensure special candies are formed from direct matches, not explosions.
+        CreateSpecialCandyIfMatch(initialMatches);
+
+        HashSet<int> columnsToRefill = new HashSet<int>();
+        if (allCandiesToDestroySet.Count > 0)
+        {
+            foreach (Candy candy in allCandiesToDestroySet)
+            {
+                int xIndex = candy.xIndex;
+                int yIndex = candy.yIndex;
+                columnsToRefill.Add(xIndex);
+
+                // Ensure the candy being destroyed is the one on the board at its coordinates,
+                // or handle cases where it might have been replaced (e.g., by CreateSpecialCandyIfMatch)
+                if (candyBoard[xIndex, yIndex].candy == candy.gameObject)
+                {
+                    Destroy(candy.gameObject);
+                    candyBoard[xIndex, yIndex] = new Node(true, null);
+                }
+                else if (candy.gameObject != null) // If it's not on the board but exists and is in the set, destroy it.
+                {
+                    Destroy(candy.gameObject);
+                    // If the node it was supposed to be in still has something else, don't nullify node unless sure.
+                    // This path implies the candy object was slated for destruction but might have been moved or board changed.
+                    // Most importantly, the candy object in allCandiesToDestroySet is destroyed.
+                }
+            }
+        }
+
+        // Collapse columns and fill empty spaces
         foreach (int x in columnsToRefill)
         {
             CollapseColumn(x);
             FillEmptySpacesInColumn(x);
         }
 
-        CheckBoard();
-        Debug.Log("Refill complete");
+        Debug.Log($"Refill complete. Total destroyed: {allCandiesToDestroySet.Count}");
+        return allCandiesToDestroySet;
     }
+
 
     private void CreateSpecialCandyIfMatch(List<Candy> matchedCandies)
     {
@@ -555,8 +656,6 @@ public class CandyBoard : MonoBehaviour
         int firstY = matchedCandies[0].yIndex;
         foreach (Candy candy in matchedCandies)
         {
-            if (matchedCandies.Contains(candy))
-                continue;
             if (candy.yIndex != firstY)
             {
                 isHorizontalMatch = false;
@@ -568,8 +667,6 @@ public class CandyBoard : MonoBehaviour
         int firstX = matchedCandies[0].xIndex;
         foreach (Candy candy in matchedCandies)
         {
-            if (matchedCandies.Contains(candy))
-                continue;
             if (candy.xIndex != firstX)
             {
                 isVerticalMatch = false;
@@ -768,7 +865,7 @@ public class CandyBoard : MonoBehaviour
                 CheckDirection(candy, Vector2Int.down, extraConnectionCandys);
                 if (extraConnectionCandys.Count >= 2)
                 {
-                    Debug.Log("I have a super horizontal match, the color is match is: " + matchCandy.connectionCandys[0].candyType);
+                    Debug.Log("Super horizontal match, color: " + matchCandy.connectionCandys[0].candyType);
                     extraConnectionCandys.AddRange(matchCandy.connectionCandys);
                     return new MatchResult() { connectionCandys = extraConnectionCandys, direction = MatchDirection.Super };
                 }
@@ -784,7 +881,7 @@ public class CandyBoard : MonoBehaviour
                 CheckDirection(candy, Vector2Int.left, extraConnectionCandys);
                 if (extraConnectionCandys.Count >= 2)
                 {
-                    Debug.Log("I have a super vertical match, the color is match is: " + matchCandy.connectionCandys[0].candyType);
+                    Debug.Log("Super vertical match, color: " + matchCandy.connectionCandys[0].candyType);
                     extraConnectionCandys.AddRange(matchCandy.connectionCandys);
                     return new MatchResult() { connectionCandys = extraConnectionCandys, direction = MatchDirection.Super };
                 }
@@ -803,12 +900,12 @@ public class CandyBoard : MonoBehaviour
         CheckDirection(candy, Vector2Int.left, connectionCandys);
         if (connectionCandys.Count == 3)
         {
-            Debug.Log("I have a normal horizontal match,the color is match is: " + connectionCandys[0].candyType);
+            Debug.Log("Normal horizontal match, color: " + connectionCandys[0].candyType);
             return new MatchResult() { connectionCandys = connectionCandys, direction = MatchDirection.Horizontal };
         }
         else if (connectionCandys.Count >= 4)
         {
-            Debug.Log("I have a long horizontal match,the color is match is: " + connectionCandys[0].candyType);
+            Debug.Log("Long horizontal match, color: " + connectionCandys[0].candyType);
             return new MatchResult() { connectionCandys = connectionCandys, direction = MatchDirection.LongHorizontal };
         }
         connectionCandys.Clear();
@@ -817,12 +914,12 @@ public class CandyBoard : MonoBehaviour
         CheckDirection(candy, Vector2Int.down, connectionCandys);
         if (connectionCandys.Count == 3)
         {
-            Debug.Log("I have a normal Vertical match,the color is match is: " + connectionCandys[0].candyType);
+            Debug.Log("Normal vertical match, color: " + connectionCandys[0].candyType);
             return new MatchResult() { connectionCandys = connectionCandys, direction = MatchDirection.Vertical };
         }
         else if (connectionCandys.Count >= 4)
         {
-            Debug.Log("I have a long vertical match,the color is match is: " + connectionCandys[0].candyType);
+            Debug.Log("Long vertical match, color: " + connectionCandys[0].candyType);
             return new MatchResult() { connectionCandys = connectionCandys, direction = MatchDirection.LongVertical };
         }
         else
@@ -910,18 +1007,28 @@ public class CandyBoard : MonoBehaviour
             Debug.LogError("Cannot select null candy");
             return;
         }
-        Debug.Log($"SelectCandy: Input candy = {candy.candyType} at [{candy.xIndex},{candy.yIndex}]");
+
+        Debug.Log($"SelectCandy: Input candy = {candy.candyType} at [{candy.xIndex},{candy.yIndex}], isSpecial: {candy.isSpecial}");
         Debug.Log($"SelectCandy: Current selectedCandy = {(selectedCandy == null ? "null" : $"{selectedCandy.candyType} at [{selectedCandy.xIndex},{selectedCandy.yIndex}]")}");
+
         if (isProcessingMove)
         {
-            Debug.Log("Still processing previous move");
+            Debug.Log("Still processing previous move, cannot select");
             return;
         }
+
+        // Validate candy indices
+        if (candy.xIndex < 0 || candy.xIndex >= boardWidth || candy.yIndex < 0 || candy.yIndex >= boardHeight)
+        {
+            Debug.LogError($"Invalid indices for candy: [{candy.xIndex},{candy.yIndex}]");
+            return;
+        }
+
         if (selectedCandy == null)
         {
             selectedCandy = candy;
             selectedCandy.SetSelected(true);
-            Debug.Log($"First candy selected: {selectedCandy.candyType} at [{selectedCandy.xIndex},{selectedCandy.yIndex}]");
+            Debug.Log($"Selected first candy: {selectedCandy.candyType} at [{selectedCandy.xIndex},{selectedCandy.yIndex}]");
         }
         else if (selectedCandy == candy)
         {
@@ -931,7 +1038,7 @@ public class CandyBoard : MonoBehaviour
         }
         else
         {
-            Debug.Log($"Second candy selected: {candy.candyType} at [{candy.xIndex},{candy.yIndex}], attempting swap");
+            Debug.Log($"Selected second candy: {candy.candyType} at [{candy.xIndex},{candy.yIndex}], attempting swap");
             Candy firstCandy = selectedCandy;
             Candy secondCandy = candy;
             firstCandy.SetSelected(false);
@@ -942,12 +1049,32 @@ public class CandyBoard : MonoBehaviour
 
     private void SwapCandy(Candy firstCandy, Candy secondCandy)
     {
-        Debug.Log($"Attempting to swap: {firstCandy.candyType}[{firstCandy.xIndex},{firstCandy.yIndex}] with {secondCandy.candyType}[{secondCandy.xIndex},{secondCandy.yIndex}]");
-        if (!IsAdjacent(firstCandy, secondCandy))
+        Debug.Log($"SwapCandy: Attempting to swap {firstCandy.candyType}[{firstCandy.xIndex},{firstCandy.yIndex}] with {secondCandy.candyType}[{secondCandy.xIndex},{secondCandy.yIndex}]");
+
+        // Validate candies
+        if (firstCandy == null || secondCandy == null)
         {
-            Debug.LogWarning("Candies are not adjacent!");
+            Debug.LogError("Cannot swap with null candy");
+            isProcessingMove = false;
             return;
         }
+
+        // Validate indices
+        if (firstCandy.xIndex < 0 || firstCandy.xIndex >= boardWidth || firstCandy.yIndex < 0 || firstCandy.yIndex >= boardHeight ||
+            secondCandy.xIndex < 0 || secondCandy.xIndex >= boardWidth || secondCandy.yIndex < 0 || secondCandy.yIndex >= boardHeight)
+        {
+            Debug.LogError($"Invalid indices: firstCandy [{firstCandy.xIndex},{firstCandy.yIndex}], secondCandy [{secondCandy.xIndex},{secondCandy.yIndex}]");
+            isProcessingMove = false;
+            return;
+        }
+
+        if (!IsAdjacent(firstCandy, secondCandy))
+        {
+            Debug.LogWarning($"Candies are not adjacent: [{firstCandy.xIndex},{firstCandy.yIndex}] and [{secondCandy.xIndex},{secondCandy.yIndex}]");
+            isProcessingMove = false;
+            return;
+        }
+
         isProcessingMove = true;
         DoSwap(firstCandy, secondCandy);
         StartCoroutine(ProcessMatches(firstCandy, secondCandy));
@@ -961,24 +1088,23 @@ public class CandyBoard : MonoBehaviour
             isProcessingMove = false;
             return;
         }
+
         int firstX = firstCandy.xIndex;
         int firstY = firstCandy.yIndex;
         int secondX = secondCandy.xIndex;
         int secondY = secondCandy.yIndex;
+
         Debug.Log($"DoSwap: Swapping [{firstX},{firstY}] with [{secondX},{secondY}]");
-        if (firstX < 0 || firstX >= boardWidth || firstY < 0 || firstY >= boardHeight ||
-            secondX < 0 || secondX >= boardWidth || secondY < 0 || secondY >= boardHeight)
-        {
-            Debug.LogError("Invalid indices for candy swap");
-            isProcessingMove = false;
-            return;
-        }
+
         Vector3 firstPos = firstCandy.transform.position;
         Vector3 secondPos = secondCandy.transform.position;
+
         candyBoard[firstX, firstY].candy = secondCandy.gameObject;
         candyBoard[secondX, secondY].candy = firstCandy.gameObject;
+
         firstCandy.setIndicies(secondX, secondY);
         secondCandy.setIndicies(firstX, firstY);
+
         firstCandy.MoveToTarget(secondPos);
         secondCandy.MoveToTarget(firstPos);
     }
@@ -993,67 +1119,99 @@ public class CandyBoard : MonoBehaviour
             yield break;
         }
 
-        yield return new WaitForSeconds(0.3f);
+        yield return new WaitForSeconds(0.3f); // Wait for swap animation
         bool hasMatch = false;
-        bool hasSpecialCandy = firstCandy.isSpecial || secondCandy.isSpecial;
 
         try
         {
-            hasMatch = CheckBoard();
+            hasMatch = CheckBoard(); // CheckBoard populates this.candyToRemove
             Debug.Log($"CheckBoard result: {hasMatch}");
         }
         catch (System.Exception e)
         {
             Debug.LogError($"Error in CheckBoard: {e.Message}\nStackTrace: {e.StackTrace}");
+            isProcessingMove = false; // Reset on error
+            yield break;
         }
 
         if (hasMatch)
         {
             Debug.Log("Match found! Processing matches...");
+            // this.candyToRemove is already populated by CheckBoard.
+            // ProcessTurnOnMatchedBoard will use it.
             StartCoroutine(ProcessTurnOnMatchedBoard(true));
-            yield return new WaitForSeconds(0.5f);
+            // isProcessingMove and selectedCandy will be reset at the end of ProcessTurnOnMatchedBoard's cascade.
         }
-        else if (hasSpecialCandy)
+        else // No general match found by CheckBoard after the swap.
+             // Check if the swapped candies themselves (if special) created a specific match.
         {
-            Debug.Log("No match found, but special candy present. Checking for special activation...");
-            MatchResult match1 = IsConnected(firstCandy);
-            MatchResult match2 = IsConnected(secondCandy);
-            bool validSpecialMatch = (match1.connectionCandys != null && match1.connectionCandys.Count >= 3) ||
-                                    (match2.connectionCandys != null && match2.connectionCandys.Count >= 3);
+            bool specialActivatedBySwap = false;
+            List<Candy> tempMatchListForSpecial = new List<Candy>();
 
-            if (validSpecialMatch)
+            if (firstCandy.isSpecial)
             {
-                if (firstCandy.isSpecial)
-                    firstCandy.ActivateSpecialEffect();
-                if (secondCandy.isSpecial)
-                    secondCandy.ActivateSpecialEffect();
+                MatchResult firstCandyConnection = IsConnected(firstCandy);
+                if (firstCandyConnection.connectionCandys != null && firstCandyConnection.connectionCandys.Count >= 3)
+                {
+                    Debug.Log($"Special {firstCandy.candyType} at [{firstCandy.xIndex},{firstCandy.yIndex}] formed a match of {firstCandyConnection.connectionCandys.Count} by swapping.");
+                    foreach (Candy c in firstCandyConnection.connectionCandys)
+                    {
+                        if (!this.candyToRemove.Contains(c)) this.candyToRemove.Add(c); // Use the board's list
+                    }
+                    specialActivatedBySwap = true;
+                }
+            }
+
+            if (secondCandy.isSpecial)
+            {
+                MatchResult secondCandyConnection = IsConnected(secondCandy);
+                if (secondCandyConnection.connectionCandys != null && secondCandyConnection.connectionCandys.Count >= 3)
+                {
+                    Debug.Log($"Special {secondCandy.candyType} at [{secondCandy.xIndex},{secondCandy.yIndex}] formed a match of {secondCandyConnection.connectionCandys.Count} by swapping.");
+                    foreach (Candy c in secondCandyConnection.connectionCandys)
+                    {
+                        if (!this.candyToRemove.Contains(c)) this.candyToRemove.Add(c); // Use the board's list
+                    }
+                    specialActivatedBySwap = true;
+                }
+            }
+
+            if (specialActivatedBySwap)
+            {
+                Debug.Log("Special candy activated by direct swap match. Processing turn.");
+                StartCoroutine(ProcessTurnOnMatchedBoard(true));
+                // isProcessingMove and selectedCandy will be reset at the end of ProcessTurnOnMatchedBoard's cascade.
             }
             else
             {
-                Debug.Log("No valid match for special candy, swapping back");
-                DoSwap(firstCandy, secondCandy);
-            }
-        }
-        else
-        {
-            Debug.Log("No match found, swapping back");
-            DoSwap(firstCandy, secondCandy);
-            yield return new WaitForSeconds(0.3f);
+                Debug.Log("No match found from swap (neither general nor specific special activation), swapping back.");
+                DoSwap(firstCandy, secondCandy); // Swap back
+                yield return new WaitForSeconds(0.3f); // Animation for swap back
 
-            if (!CheckForPossibleMatches())
-            {
-                Debug.Log("No possible matches remain after failed swap, reinitializing board...");
-                yield return new WaitForSeconds(0.5f);
-                InitializeBoard();
+                isProcessingMove = false; // Crucial: reset after swap back and no match
+                selectedCandy = null;
+
+                if (!CheckForPossibleMatches()) // Check for general board state
+                {
+                    Debug.Log("No possible matches remain after failed swap, reinitializing board...");
+                    yield return new WaitForSeconds(0.5f); // Give time for user to see failed swap
+                    InitializeBoard(); // This will set isProcessingMove internally if it runs
+                }
             }
         }
-        isProcessingMove = false;
-        selectedCandy = null;
-        Debug.Log("=== ProcessMatches END ===");
+        // isProcessingMove is generally set to false at the end of successful ProcessTurnOnMatchedBoard cascades
+        // or explicitly in the swap-back case.
+        Debug.Log("=== ProcessMatches END (or handing over to ProcessTurnOnMatchedBoard) ===");
     }
 
     private bool IsAdjacent(Candy firstCandy, Candy secondCandy)
     {
+        if (firstCandy == null || secondCandy == null)
+        {
+            Debug.LogError("IsAdjacent: One or both candies are null");
+            return false;
+        }
+
         bool adjacent = Mathf.Abs(firstCandy.xIndex - secondCandy.xIndex) +
                         Mathf.Abs(firstCandy.yIndex - secondCandy.yIndex) == 1;
         Debug.Log($"IsAdjacent check: [{firstCandy.xIndex},{firstCandy.yIndex}] to [{secondCandy.xIndex},{secondCandy.yIndex}] = {adjacent}");

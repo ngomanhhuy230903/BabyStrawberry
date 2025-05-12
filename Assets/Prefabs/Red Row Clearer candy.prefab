@@ -11,9 +11,8 @@ GameObject:
   - component: {fileID: 4664424113939238744}
   - component: {fileID: 3288642462617014870}
   - component: {fileID: 3620297143109048841}
-  - component: {fileID: -63022754086224634}
   - component: {fileID: 4474131268471522926}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: Red Row Clearer candy
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -30,7 +29,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: -9.21, y: 0, z: 0}
-  m_LocalScale: {x: 0.55, y: 0.55, z: 0.55}
+  m_LocalScale: {x: 0.5, y: 0.5, z: 0.5}
   m_ConstrainProportionsScale: 1
   m_Children: []
   m_Father: {fileID: 0}
@@ -104,27 +103,8 @@ MonoBehaviour:
   isMoving: 0
   isMatched: 0
   candyType: 0
-  isSpecial: 0
+  isSpecial: 1
   specialEffect: 1
---- !u!114 &-63022754086224634
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 8821945798723669960}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 5d898f693e104c44eb384cb7d4241631, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  xIndex: 0
-  yIndex: 0
-  isMoving: 0
-  isMatched: 0
-  candyType: 0
-  isSpecial: 0
-  specialEffect: 0
 --- !u!61 &4474131268471522926
 BoxCollider2D:
   m_ObjectHideFlags: 0

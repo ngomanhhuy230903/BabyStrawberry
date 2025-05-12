@@ -38,7 +38,7 @@ public class Candy : MonoBehaviour
             Debug.LogError("GameObject is null in Candy.Awake");
             return;
         }
-        Debug.Log($"Candy {name} Awake start, GameObject: {gameObject.name}");
+        Debug.Log($"Candy {name} Awake, GameObject: {gameObject.name}");
 
         Collider2D collider2D = GetComponent<Collider2D>();
         if (collider2D == null)
@@ -95,6 +95,8 @@ public class Candy : MonoBehaviour
         isMatched = false;
         isMoving = false;
 
+        Debug.Log($"Candy initialized: {candyType} at [{xIndex},{yIndex}], isSpecial: {isSpecial}, specialEffect: {effect}");
+
         if (spriteRenderer == null)
         {
             spriteRenderer = GetComponent<SpriteRenderer>();
@@ -126,6 +128,23 @@ public class Candy : MonoBehaviour
         Debug.Log($"setIndicies: Candy {candyType} from [{this.xIndex},{this.yIndex}] to [{xIndex},{yIndex}]");
         this.xIndex = xIndex;
         this.yIndex = yIndex;
+
+        // Update gameObject name to reflect new indices
+        if (isSpecial)
+        {
+            if (specialEffect == SpecialCandyEffect.ClearRow)
+            {
+                gameObject.name = $"LongHorizontal_{candyType}_{xIndex}_{yIndex}";
+            }
+            else if (specialEffect == SpecialCandyEffect.ClearColumn)
+            {
+                gameObject.name = $"LongVertical_{candyType}_{xIndex}_{yIndex}";
+            }
+        }
+        else
+        {
+            gameObject.name = $"Candy_{candyType}_{xIndex}_{yIndex}";
+        }
     }
 
     public void MoveToTarget(Vector3 targetPosition)
@@ -167,10 +186,14 @@ public class Candy : MonoBehaviour
 
     void OnMouseDown()
     {
-        Debug.Log($"Direct click on candy: Type={candyType}, Position=[{xIndex},{yIndex}]");
-        if (CandyBoard.instance != null && !CandyBoard.instance.isProcessingMove)
+        Debug.Log($"OnMouseDown: Candy {candyType} at [{xIndex},{yIndex}], isSpecial={isSpecial}, isMoving={isMoving}");
+        if (CandyBoard.instance != null && !CandyBoard.instance.isProcessingMove && !isMoving)
         {
             CandyBoard.instance.SelectCandy(this);
+        }
+        else
+        {
+            Debug.LogWarning($"Cannot select candy: CandyBoard.instance={(CandyBoard.instance == null ? "null" : "not null")}, isProcessingMove={CandyBoard.instance?.isProcessingMove}, isMoving={isMoving}");
         }
     }
 
@@ -188,112 +211,101 @@ public class Candy : MonoBehaviour
         return distance <= 0.1f;
     }
 
-    public void ActivateSpecialEffect()
+    // In Candy.cs
+
+    // Rename for clarity, this is now primarily for visual effects when activated by a match.
+    public void ActivateSpecialEffectAndPlayVisuals()
     {
         if (!isSpecial) return;
 
-        Debug.Log($"Activating special candy effect: {specialEffect} at [{xIndex},{yIndex}]");
-        StartCoroutine(PlayActivationEffect());
+        Debug.Log($"Playing activation visuals for: {specialEffect} at [{xIndex},{yIndex}]");
+        StartCoroutine(PlayActivationEffect()); // The flash
 
+        // Trigger the beam visuals. These should be purely visual and not call game logic.
         if (specialEffect == SpecialCandyEffect.ClearRow)
         {
-            Debug.Log($"Activating row clear effect at row {yIndex}");
-            StartCoroutine(RowClearEffect(yIndex));
+            Debug.Log($"Playing row clear visual effect at row {yIndex}");
+            StartCoroutine(RowClearVisualEffect()); // Changed name
         }
         else if (specialEffect == SpecialCandyEffect.ClearColumn)
         {
-            Debug.Log($"Activating column clear effect at column {xIndex}");
-            StartCoroutine(ColumnClearEffect(xIndex));
+            Debug.Log($"Playing column clear visual effect at column {xIndex}");
+            StartCoroutine(ColumnClearVisualEffect()); // Changed name
         }
     }
 
+    // This coroutine is for the initial flash/highlight of the special candy itself
     private IEnumerator PlayActivationEffect()
     {
         if (spriteRenderer != null)
         {
-            for (int i = 0; i < 3; i++)
-            {
-                spriteRenderer.color = new Color(1f, 1f, 0f, spriteRenderer.color.a);
-                yield return new WaitForSeconds(0.05f);
-                spriteRenderer.color = new Color(1f, 1f, 1f, spriteRenderer.color.a);
-                yield return new WaitForSeconds(0.05f);
-            }
+            // Example: Simple flash
+            Color originalColor = spriteRenderer.color;
+            spriteRenderer.color = new Color(1f, 1f, 0.5f, spriteRenderer.color.a); // Yellowish highlight
+            yield return new WaitForSeconds(0.1f);
+            spriteRenderer.color = originalColor;
+            yield return new WaitForSeconds(0.1f);
+            spriteRenderer.color = new Color(1f, 1f, 0.5f, spriteRenderer.color.a);
+            yield return new WaitForSeconds(0.1f);
+            spriteRenderer.color = originalColor;
         }
     }
 
-    private IEnumerator RowClearEffect(int rowIndex)
+    // Modified to be purely visual, NO CandyBoard.instance.ClearRow calls
+    private IEnumerator RowClearVisualEffect()
     {
-        CandyBoard.instance.ClearRow(rowIndex);
+        // CandyBoard.instance.ClearRow(rowIndex); // REMOVED - Logic is now in CandyBoard.RemoveAndRefill
 
-        GameObject rowBeam = new GameObject("RowBeam");
-        rowBeam.transform.position = transform.position;
+        GameObject rowBeam = new GameObject("RowBeamVisual");
+        rowBeam.transform.position = this.transform.position; // Centered on the special candy
 
         SpriteRenderer beamRenderer = rowBeam.AddComponent<SpriteRenderer>();
-        beamRenderer.color = new Color(1f, 0.5f, 0.2f, 0.7f);
-        beamRenderer.transform.localScale = new Vector3(
-            CandyBoard.instance.boardWidth * CandyBoard.instance.spacingScale * 1.5f,
-            0.5f,
-            1f
-        );
+        // Configure your beam's appearance (sprite, color, scale, etc.)
+        // Example:
+        beamRenderer.color = new Color(1f, 0.8f, 0.2f, 0.7f); // Orange-ish
+                                                              // Adjust scale to cover the row. You might need to get board dimensions from CandyBoard.instance
+        float beamWidth = CandyBoard.instance.boardWidth * CandyBoard.instance.spacingScale;
+        beamRenderer.transform.localScale = new Vector3(beamWidth, 0.3f * CandyBoard.instance.spacingScale, 1f);
+        // Assign a sprite if you have one, e.g., a white square or a custom beam sprite
+        // beamRenderer.sprite = Resources.Load<Sprite>("PathToYourBeamSprite");
 
-        Sprite beamSprite = Resources.Load<Sprite>("Effects/RowClearBeam");
-        if (beamSprite != null)
-        {
-            beamRenderer.sprite = beamSprite;
-        }
-        else
-        {
-            Debug.LogWarning("RowClearBeam sprite not found in Resources/Effects. Using default square.");
-        }
-
-        float duration = 0.5f;
+        float duration = 0.3f; // Visual effect duration
         float time = 0;
         while (time < duration)
         {
             float t = time / duration;
-            beamRenderer.color = new Color(1f, 0.5f, 0.2f, 0.7f * (1 - t));
+            beamRenderer.color = new Color(beamRenderer.color.r, beamRenderer.color.g, beamRenderer.color.b, 0.7f * (1 - t)); // Fade out
+                                                                                                                              // Optional: Animate scale or position
             time += Time.deltaTime;
             yield return null;
         }
-
         Destroy(rowBeam);
     }
 
-    private IEnumerator ColumnClearEffect(int columnIndex)
+    // Modified to be purely visual, NO CandyBoard.instance.ClearColumn calls
+    private IEnumerator ColumnClearVisualEffect()
     {
-        CandyBoard.instance.ClearColumn(columnIndex);
+        // CandyBoard.instance.ClearColumn(columnIndex); // REMOVED
 
-        GameObject columnBeam = new GameObject("ColumnBeam");
-        columnBeam.transform.position = transform.position;
+        GameObject columnBeam = new GameObject("ColumnBeamVisual");
+        columnBeam.transform.position = this.transform.position;
 
         SpriteRenderer beamRenderer = columnBeam.AddComponent<SpriteRenderer>();
-        beamRenderer.color = new Color(0.2f, 0.5f, 1f, 0.7f);
-        beamRenderer.transform.localScale = new Vector3(
-            0.5f,
-            CandyBoard.instance.boardHeight * CandyBoard.instance.spacingScale * 1.5f,
-            1f
-        );
+        beamRenderer.color = new Color(0.2f, 0.8f, 1f, 0.7f); // Bluish
+        float beamHeight = CandyBoard.instance.boardHeight * CandyBoard.instance.spacingScale;
+        beamRenderer.transform.localScale = new Vector3(0.3f * CandyBoard.instance.spacingScale, beamHeight, 1f);
+        // beamRenderer.sprite = Resources.Load<Sprite>("PathToYourBeamSprite");
 
-        Sprite beamSprite = Resources.Load<Sprite>("Effects/ColumnClearBeam");
-        if (beamSprite != null)
-        {
-            beamRenderer.sprite = beamSprite;
-        }
-        else
-        {
-            Debug.LogWarning("ColumnClearBeam sprite not found in Resources/Effects. Using default square.");
-        }
 
-        float duration = 0.5f;
+        float duration = 0.3f;
         float time = 0;
         while (time < duration)
         {
             float t = time / duration;
-            beamRenderer.color = new Color(0.2f, 0.5f, 1f, 0.7f * (1 - t));
+            beamRenderer.color = new Color(beamRenderer.color.r, beamRenderer.color.g, beamRenderer.color.b, 0.7f * (1 - t));
             time += Time.deltaTime;
             yield return null;
         }
-
         Destroy(columnBeam);
     }
 }
