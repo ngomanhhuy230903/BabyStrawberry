@@ -1,7 +1,7 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-
+using System.Linq;
 public class CandyBoard : MonoBehaviour
 {
     public int boardWidth = 6;
@@ -491,31 +491,26 @@ public class CandyBoard : MonoBehaviour
 
     public IEnumerator ProcessTurnOnMatchedBoard(bool subtractMoves)
     {
-        if (this.candyToRemove.Count == 0) // Use this.candyToRemove which is populated by CheckBoard
+        if (this.candyToRemove.Count == 0)
         {
-            isProcessingMove = false; // Ensure this is reset if no candies to remove
+            isProcessingMove = false;
             yield break;
         }
 
-        // Create a copy of the initial matches for processing special candy creation logic
         List<Candy> initialMatches = new List<Candy>(this.candyToRemove);
-
-        // RemoveAndRefill will now return all candies that were actually destroyed (initial + special effects)
-        HashSet<Candy> allDestroyedThisTurn = RemoveAndRefill(initialMatches);
+        HashSet<Candy> allDestroyedThisTurn = RemoveAndRefill(initialMatches); // RemoveAndRefill giờ đã dùng Strategy
 
         if (allDestroyedThisTurn.Count > 0)
         {
             GameManager.instance.ProcessTurn(allDestroyedThisTurn.Count, subtractMoves);
         }
 
-        // Clear the board's main list after processing
         this.candyToRemove.Clear();
+        yield return new WaitForSeconds(0.4f);
 
-        yield return new WaitForSeconds(0.4f); // Delay for animations and effects
-
-        if (CheckBoard()) // Check for new matches caused by refill
+        if (CheckBoard())
         {
-            StartCoroutine(ProcessTurnOnMatchedBoard(false)); // Process cascades without subtracting moves
+            StartCoroutine(ProcessTurnOnMatchedBoard(false));
         }
         else
         {
@@ -525,25 +520,26 @@ public class CandyBoard : MonoBehaviour
                 Debug.Log("No more possible matches after cascade, reinitializing board...");
                 InitializeBoard();
             }
-            isProcessingMove = false; // Processing finished
+            isProcessingMove = false;
             selectedCandy = null;
         }
     }
-
     // Modified RemoveAndRefill to handle chained special activations and return all destroyed candies
     private HashSet<Candy> RemoveAndRefill(List<Candy> initialMatches)
     {
         HashSet<Candy> allCandiesToDestroySet = new HashSet<Candy>();
         Queue<Candy> processQueue = new Queue<Candy>();
-        List<Candy> specialCandiesActivatedThisCycle = new List<Candy>(); // To prevent re-activation in the same cycle
+        // Theo dõi các kẹo đặc biệt đã kích hoạt trong CHU KỲ NÀY của RemoveAndRefill
+        // để tránh kích hoạt lặp lại vô hạn nếu một kẹo đặc biệt tự xóa chính nó
+        // hoặc bị xóa bởi một kẹo đặc biệt khác mà nó cũng xóa.
+        List<Candy> specialCandiesActivatedThisCycle = new List<Candy>();
 
-        // Add initial matches to the queue and destruction set
         foreach (Candy candy in initialMatches)
         {
-            if (allCandiesToDestroySet.Add(candy)) // .Add returns true if the item was new to the set
+            if (allCandiesToDestroySet.Add(candy)) // .Add trả về true nếu item mới được thêm vào set
             {
                 processQueue.Enqueue(candy);
-                candy.isMatched = true; // Mark as matched
+                candy.isMatched = true; // Đánh dấu là đã khớp
             }
         }
 
@@ -551,91 +547,81 @@ public class CandyBoard : MonoBehaviour
         {
             Candy currentCandy = processQueue.Dequeue();
 
-            // Check if this candy is special and should trigger its effect
-            // It should trigger if:
-            // 1. It's special.
-            // 2. It's marked for destruction (i.e., it was part of a match or caught in another special's effect).
-            // 3. It hasn't already activated in this specific RemoveAndRefill cycle.
-            if (currentCandy.isSpecial && allCandiesToDestroySet.Contains(currentCandy) && !specialCandiesActivatedThisCycle.Contains(currentCandy))
+            // Kiểm tra xem kẹo này có phải là special và nên kích hoạt hiệu ứng không
+            if (currentCandy.isSpecial &&
+                allCandiesToDestroySet.Contains(currentCandy) && // Nó phải nằm trong danh sách bị hủy (do khớp hoặc do hiệu ứng khác)
+                !specialCandiesActivatedThisCycle.Contains(currentCandy)) // Và chưa kích hoạt trong chu kỳ này
             {
-                Debug.Log($"Processing special effect for {currentCandy.candyType} at [{currentCandy.xIndex},{currentCandy.yIndex}]");
-                specialCandiesActivatedThisCycle.Add(currentCandy);
-                currentCandy.ActivateSpecialEffectAndPlayVisuals(); // Play visuals like flash and beams
+                Debug.Log($"Processing special effect for {currentCandy.candyType} at [{currentCandy.xIndex},{currentCandy.yIndex}] using strategy.");
+                specialCandiesActivatedThisCycle.Add(currentCandy); // Đánh dấu đã kích hoạt trong chu kỳ này
 
-                List<Candy> newlyAffectedBySpecial = new List<Candy>();
-                if (currentCandy.specialEffect == SpecialCandyEffect.ClearRow)
-                {
-                    for (int x = 0; x < boardWidth; x++)
-                    {
-                        if (candyBoard[x, currentCandy.yIndex].isUsable && candyBoard[x, currentCandy.yIndex].candy != null)
-                        {
-                            Candy affectedCandy = candyBoard[x, currentCandy.yIndex].candy.GetComponent<Candy>();
-                            if (affectedCandy != null && allCandiesToDestroySet.Add(affectedCandy))
-                            {
-                                newlyAffectedBySpecial.Add(affectedCandy);
-                            }
-                        }
-                    }
-                }
-                else if (currentCandy.specialEffect == SpecialCandyEffect.ClearColumn)
-                {
-                    for (int y = 0; y < boardHeight; y++)
-                    {
-                        if (candyBoard[currentCandy.xIndex, y].isUsable && candyBoard[currentCandy.xIndex, y].candy != null)
-                        {
-                            Candy affectedCandy = candyBoard[currentCandy.xIndex, y].candy.GetComponent<Candy>();
-                            if (affectedCandy != null && allCandiesToDestroySet.Add(affectedCandy))
-                            {
-                                newlyAffectedBySpecial.Add(affectedCandy);
-                            }
-                        }
-                    }
-                }
+                // THAY ĐỔI CHÍNH: Gọi phương thức của Candy để thực thi logic qua strategy
+                // ExecuteSpecialEffectLogic sẽ chạy cả visuals và logic của strategy
+                // Strategy sẽ cập nhật allCandiesToDestroySet và trả về các kẹo *mới* bị ảnh hưởng
+                List<Candy> newlyAffectedBySpecial = currentCandy.ExecuteSpecialEffectLogic(this, allCandiesToDestroySet);
 
-                // If these newly affected candies are also special, add them to the queue to process their effects
+                // Nếu các kẹo mới bị ảnh hưởng này cũng là special, thêm chúng vào hàng đợi
+                // để xử lý hiệu ứng của chúng trong các vòng lặp tiếp theo của while này.
                 foreach (Candy newlyHitCandy in newlyAffectedBySpecial)
                 {
-                    newlyHitCandy.isMatched = true; // Mark for destruction
-                    if (newlyHitCandy.isSpecial && !processQueue.Contains(newlyHitCandy) && !specialCandiesActivatedThisCycle.Contains(newlyHitCandy))
+                    // Đảm bảo chúng được đánh dấu là isMatched để logic hủy hoạt động đúng
+                    // (mặc dù allCandiesToDestroySet.Add đã làm điều này, nhưng để rõ ràng)
+                    newlyHitCandy.isMatched = true;
+
+                    // Chỉ thêm vào hàng đợi nếu nó là special, chưa có trong hàng đợi,
+                    // và chưa kích hoạt trong chu kỳ này.
+                    if (newlyHitCandy.isSpecial &&
+                        !processQueue.Contains(newlyHitCandy) && // Tránh xử lý lại nếu đã có trong queue
+                        !specialCandiesActivatedThisCycle.Contains(newlyHitCandy)) // Tránh kích hoạt lại trong cùng 1 cycle
                     {
+                        Debug.Log($"Queuing chained special candy: {newlyHitCandy.name}");
                         processQueue.Enqueue(newlyHitCandy);
                     }
                 }
             }
         }
 
-        // Create new special candies based on the original matches (e.g., 4-in-a-row)
-        // This should use the 'initialMatches' list, not 'allCandiesToDestroySet',
-        // to ensure special candies are formed from direct matches, not explosions.
-        CreateSpecialCandyIfMatch(initialMatches);
+        // Tạo kẹo đặc biệt mới dựa trên các kết hợp ban đầu (ví dụ: 4 kẹo thẳng hàng)
+        // Điều này nên sử dụng danh sách 'initialMatches', không phải 'allCandiesToDestroySet',
+        // để đảm bảo kẹo đặc biệt được tạo từ các kết hợp trực tiếp, không phải từ các vụ nổ.
+        CreateSpecialCandyIfMatch(initialMatches); // Kiểm tra điều kiện tạo kẹo đặc biệt mới
 
         HashSet<int> columnsToRefill = new HashSet<int>();
         if (allCandiesToDestroySet.Count > 0)
         {
             foreach (Candy candy in allCandiesToDestroySet)
             {
+                if (candy == null || candy.gameObject == null) continue; // Kẹo có thể đã bị hủy bởi một hiệu ứng khác
+
                 int xIndex = candy.xIndex;
                 int yIndex = candy.yIndex;
                 columnsToRefill.Add(xIndex);
 
-                // Ensure the candy being destroyed is the one on the board at its coordinates,
-                // or handle cases where it might have been replaced (e.g., by CreateSpecialCandyIfMatch)
+                // Đảm bảo kẹo đang bị hủy là kẹo trên bàn cờ tại tọa độ của nó,
+                // hoặc xử lý các trường hợp nó có thể đã được thay thế (ví dụ: bởi CreateSpecialCandyIfMatch)
                 if (candyBoard[xIndex, yIndex].candy == candy.gameObject)
                 {
                     Destroy(candy.gameObject);
                     candyBoard[xIndex, yIndex] = new Node(true, null);
                 }
-                else if (candy.gameObject != null) // If it's not on the board but exists and is in the set, destroy it.
+                else if (candy.gameObject != null) // Nếu nó không trên bàn cờ nhưng tồn tại và trong set, hủy nó.
                 {
+                    // If the candy object still exists but is not what the board expects at its (old) location
+                    // (e.g., it was replaced by a special candy, or already moved/destroyed by another effect),
+                    // we still need to ensure this specific instance from allCandiesToDestroySet is destroyed.
+                    Debug.LogWarning($"Candy {candy.name} at [{xIndex},{yIndex}] was in destroy set, but board has different/null candy. Destroying instance.");
                     Destroy(candy.gameObject);
-                    // If the node it was supposed to be in still has something else, don't nullify node unless sure.
-                    // This path implies the candy object was slated for destruction but might have been moved or board changed.
-                    // Most importantly, the candy object in allCandiesToDestroySet is destroyed.
+                    // Không nullify node nếu không chắc chắn, vì node đó có thể đã chứa kẹo mới.
+                    // Quan trọng nhất là đối tượng kẹo trong allCandiesToDestroySet bị hủy.
+                    if (candyBoard[xIndex, yIndex].candy == candy.gameObject) // Kiểm tra lại nếu nó vô tình bị đặt lại
+                    {
+                        candyBoard[xIndex, yIndex] = new Node(true, null);
+                    }
                 }
             }
         }
 
-        // Collapse columns and fill empty spaces
+        // Thu gọn cột và lấp đầy khoảng trống
         foreach (int x in columnsToRefill)
         {
             CollapseColumn(x);

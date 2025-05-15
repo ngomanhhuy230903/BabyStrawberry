@@ -30,6 +30,8 @@ public class Candy : MonoBehaviour
     [SerializeField] public SpecialCandyEffect specialEffect;
 
     private SpriteRenderer spriteRenderer;
+    private ISpecialCandyEffectStrategy _effectStrategy; // THAY ĐỔI: Trường giữ strategy
+
 
     void Awake()
     {
@@ -83,6 +85,10 @@ public class Candy : MonoBehaviour
             }
         }
         gameObject.layer = LayerMask.NameToLayer("Candy");
+        if (_effectStrategy == null)
+        {
+            _effectStrategy = new NoEffectStrategy();
+        }
     }
 
     public void Init(int xIndex, int yIndex, CandyType type, bool isSpecial = false, SpecialCandyEffect effect = SpecialCandyEffect.None)
@@ -91,11 +97,14 @@ public class Candy : MonoBehaviour
         this.yIndex = yIndex;
         this.candyType = type;
         this.isSpecial = isSpecial;
-        this.specialEffect = effect;
+        this.specialEffect = effect; // Giữ lại enum
         isMatched = false;
         isMoving = false;
 
-        Debug.Log($"Candy initialized: {candyType} at [{xIndex},{yIndex}], isSpecial: {isSpecial}, specialEffect: {effect}");
+        // THAY ĐỔI: Gán strategy dựa trên effect
+        SetStrategyBasedOnEffect(effect);
+
+        Debug.Log($"Candy initialized: {candyType} at [{xIndex},{yIndex}], isSpecial: {isSpecial}, specialEffect: {effect}, strategy: {_effectStrategy.GetType().Name}");
 
         if (spriteRenderer == null)
         {
@@ -122,7 +131,40 @@ public class Candy : MonoBehaviour
             }
         }
     }
+    private void SetStrategyBasedOnEffect(SpecialCandyEffect effect)
+    {
+        switch (effect)
+        {
+            case SpecialCandyEffect.ClearRow:
+                _effectStrategy = new ClearRowStrategy();
+                break;
+            case SpecialCandyEffect.ClearColumn:
+                _effectStrategy = new ClearColumnStrategy();
+                break;
+            case SpecialCandyEffect.None:
+            default:
+                _effectStrategy = new NoEffectStrategy(); // Mặc định là không có hiệu ứng
+                break;
+        }
+    }
 
+    // THAY ĐỔI: Phương thức mới để thực thi logic hiệu ứng đặc biệt
+    public List<Candy> ExecuteSpecialEffectLogic(CandyBoard board, HashSet<Candy> allCandiesToDestroySet)
+    {
+        if (!isSpecial || _effectStrategy == null)
+        {
+            Debug.LogWarning($"ExecuteSpecialEffectLogic called on non-special candy or null strategy: {name}");
+            return new List<Candy>(); // Trả về danh sách rỗng nếu không phải special hoặc không có strategy
+        }
+
+        // Kích hoạt hiệu ứng hình ảnh (flash, beam visuals)
+        // Hàm này giờ chỉ tập trung vào hình ảnh
+        ActivateSpecialEffectAndPlayVisuals();
+
+        // Ủy thác logic cốt lõi cho strategy
+        // Strategy sẽ cập nhật allCandiesToDestroySet và trả về các kẹo mới bị ảnh hưởng
+        return _effectStrategy.Activate(board, this, allCandiesToDestroySet);
+    }
     public void setIndicies(int xIndex, int yIndex)
     {
         Debug.Log($"setIndicies: Candy {candyType} from [{this.xIndex},{this.yIndex}] to [{xIndex},{yIndex}]");
@@ -225,12 +267,12 @@ public class Candy : MonoBehaviour
         if (specialEffect == SpecialCandyEffect.ClearRow)
         {
             Debug.Log($"Playing row clear visual effect at row {yIndex}");
-            StartCoroutine(RowClearVisualEffect()); // Changed name
+            StartCoroutine(RowClearVisualEffect());
         }
         else if (specialEffect == SpecialCandyEffect.ClearColumn)
         {
             Debug.Log($"Playing column clear visual effect at column {xIndex}");
-            StartCoroutine(ColumnClearVisualEffect()); // Changed name
+            StartCoroutine(ColumnClearVisualEffect());
         }
     }
 
