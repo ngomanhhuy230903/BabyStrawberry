@@ -229,15 +229,18 @@ public class Candy : MonoBehaviour
     void OnMouseDown()
     {
         Debug.Log($"OnMouseDown: Candy {candyType} at [{xIndex},{yIndex}], isSpecial={isSpecial}, isMoving={isMoving}");
-        if (CandyBoard.instance != null && !CandyBoard.instance.isProcessingMove && !isMoving)
+
+        // THAY ĐỔI: Ủy thác việc xử lý click cho CandyBoard, sau đó CandyBoard sẽ chuyển cho state hiện tại
+        if (CandyBoard.instance != null) // Không cần kiểm tra isProcessingMove ở đây nữa, state sẽ quyết định
         {
-            CandyBoard.instance.SelectCandy(this);
+            CandyBoard.instance.ReportCandyClicked(this);
         }
         else
         {
-            Debug.LogWarning($"Cannot select candy: CandyBoard.instance={(CandyBoard.instance == null ? "null" : "not null")}, isProcessingMove={CandyBoard.instance?.isProcessingMove}, isMoving={isMoving}");
+            Debug.LogWarning($"Cannot select candy: CandyBoard.instance is null");
         }
     }
+
 
     public bool ValidatePosition()
     {

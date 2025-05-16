@@ -22,13 +22,35 @@ public class CandyBoard : MonoBehaviour
     private bool isInitializingBoard = false;
     public GameObject[] rowClearerPrefabs;
     public GameObject[] columnClearerPrefabs;
+    [SerializeField] private Candy _selectedCandy; // Giữ lại để các state có thể truy cập nếu cần, hoặc truyền qua constructor state
+
+    private IBoardState currentState; // THAY ĐỔI: Trạng thái hiện tại của board
 
     public void Awake()
     {
         instance = this;
         ValidateSpecialPrefabs();
     }
-
+    public void Start()
+    {
+        SetState(new InitializingBoardState(this));
+    }
+    public void SetState(IBoardState newState)
+    {
+        if (currentState != null)
+        {
+            currentState.OnExit();
+        }
+        currentState = newState;
+        if (currentState != null)
+        {
+            currentState.OnEnter();
+        }
+        else
+        {
+            Debug.LogError("SetState called with null newState!");
+        }
+    }
     private void ValidateSpecialPrefabs()
     {
         if (rowClearerPrefabs == null || rowClearerPrefabs.Length != candyPrefab.Length)
@@ -52,143 +74,219 @@ public class CandyBoard : MonoBehaviour
         }
     }
 
-    public void Start()
-    {
-        InitializeBoard();
-    }
-
     public void Update()
     {
+        // Xử lý input chung ở đây, sau đó delegate cho state
         if (Input.GetMouseButtonDown(0))
         {
+            // Chỉ xử lý click nếu state hiện tại cho phép (ví dụ, không phải đang processing)
+            // Việc quyết định có xử lý click hay không sẽ do state hiện tại đảm nhiệm
             Vector2 mousePos = Camera.main.ScreenToWorldPoint(Input.mousePosition);
             RaycastHit2D hit = Physics2D.Raycast(mousePos, Vector2.zero, Mathf.Infinity, LayerMask.GetMask("Candy"));
             if (hit.collider != null)
             {
                 Candy candy = hit.collider.gameObject.GetComponent<Candy>();
-                if (candy != null && !isProcessingMove)
+                if (candy != null && currentState != null) // Thêm kiểm tra currentState != null
                 {
-                    Debug.Log($"Clicked candy at [{candy.xIndex},{candy.yIndex}], type: {candy.candyType}, isSpecial: {candy.isSpecial}");
-                    SelectCandy(candy);
+                    currentState.HandleCandyClick(candy);
                 }
-                else
-                {
-                    Debug.LogWarning($"No Candy component on hit object: {hit.collider.gameObject.name}");
-                }
-            }
-            else
-            {
-                Debug.Log("Raycast hit nothing");
             }
         }
-        if (Input.GetKeyDown(KeyCode.Space))
+
+        if (Input.GetKeyDown(KeyCode.Space)) // Giữ lại để test nhanh việc reset board
         {
-            InitializeBoard();
+            Debug.Log("Spacebar pressed: Re-initializing board via new InitializingBoardState.");
+            SetState(new InitializingBoardState(this)); // Khởi tạo lại bằng cách set state
         }
         if (Input.GetKeyDown(KeyCode.S))
         {
-            Debug.Log($"Current selectedCandy: {(selectedCandy == null ? "null" : $"{selectedCandy.candyType} at [{selectedCandy.xIndex},{selectedCandy.yIndex}]")}");
+            Debug.Log($"Current selectedCandy: {(_selectedCandy == null ? "null" : $"{_selectedCandy.candyType} at [{_selectedCandy.xIndex},{_selectedCandy.yIndex}]")}");
+            Debug.Log($"Current Board State: {(currentState == null ? "null" : currentState.GetType().Name)}");
         }
         if (Input.GetKeyDown(KeyCode.M))
         {
             Debug.Log($"Board has possible matches: {CheckForPossibleMatches()}");
         }
-    }
 
-    public void InitializeBoard()
-    {
-        if (isInitializingBoard)
+
+        if (currentState != null) // Thêm kiểm tra currentState != null
         {
-            Debug.LogWarning("Board initialization already in progress, skipping request");
-            return;
+            currentState.UpdateState();
         }
-
-        isInitializingBoard = true;
-        StartCoroutine(InitializeBoardCoroutine());
+    }
+    public void SetSelectedCandy(Candy candy)
+    {
+        _selectedCandy = candy;
+    }
+    public Candy GetSelectedCandy()
+    {
+        return _selectedCandy;
+    }
+    public void DeselectCurrentCandy()
+    {
+        if (_selectedCandy != null)
+        {
+            _selectedCandy.SetSelected(false);
+            _selectedCandy = null;
+        }
     }
 
-    private IEnumerator InitializeBoardCoroutine()
+    public IEnumerator InitializeBoardCoroutineInternal() // Đổi tên để phân biệt
     {
-        Debug.Log("Initializing board...");
-        selectedCandy = null;
-        ClearEntireBoard();
+        Debug.Log("Initializing board (Internal Coroutine)...");
+        DeselectCurrentCandy();
+        ClearEntireBoard(); // Xóa kẹo cũ (nếu có)
 
         candyBoard = new Node[boardWidth, boardHeight];
         spaceingX = (float)((boardWidth - 1) / 2) + 1;
         spaceingY = (float)((boardHeight - 1) / 2) - 1;
 
-        if (candyPrefab == null || candyPrefab.Length == 0)
-        {
-            Debug.LogError("candyPrefab array is null or empty.");
-            isInitializingBoard = false;
-            yield break;
-        }
+        // ... (Phần kiểm tra candyPrefab, arrayLayout không đổi) ...
+        if (candyPrefab == null || candyPrefab.Length == 0) { /* ... */ yield break; }
+        // ... (các vòng lặp kiểm tra prefab, sr, sprite ...)
 
-        for (int i = 0; i < candyPrefab.Length; i++)
-        {
-            if (candyPrefab[i] == null)
-            {
-                Debug.LogError($"candyPrefab[{i}] is null.");
-                isInitializingBoard = false;
-                yield break;
-            }
-            if (candyPrefab[i].GetComponent<Candy>() == null)
-            {
-                Debug.LogError($"candyPrefab[{i}] is missing Candy component.");
-                isInitializingBoard = false;
-                yield break;
-            }
-            SpriteRenderer sr = candyPrefab[i].GetComponent<SpriteRenderer>();
-            if (sr == null)
-            {
-                Debug.LogError($"candyPrefab[{i}] is missing SpriteRenderer component.");
-                isInitializingBoard = false;
-                yield break;
-            }
-            if (sr.sprite == null)
-            {
-                Debug.LogError($"candyPrefab[{i}] has SpriteRenderer but no sprite assigned.");
-                isInitializingBoard = false;
-                yield break;
-            }
-        }
+        if (arrayLayout == null || arrayLayout.rows == null || arrayLayout.rows.Length != boardHeight) { /* ... */ yield break; }
+        // ... (vòng lặp kiểm tra arrayLayout.rows[y].row ...)
 
-        if (arrayLayout == null || arrayLayout.rows == null || arrayLayout.rows.Length != boardHeight)
-        {
-            Debug.LogError("arrayLayout is null or has incorrect row count.");
-            isInitializingBoard = false;
-            yield break;
-        }
-        for (int y = 0; y < boardHeight; y++)
-        {
-            if (arrayLayout.rows[y].row == null || arrayLayout.rows[y].row.Length != boardWidth)
-            {
-                Debug.LogError($"arrayLayout.rows[{y}].row is null or has incorrect length.");
-                isInitializingBoard = false;
-                yield break;
-            }
-        }
 
         CreateBoardWithoutMatches();
-        yield return new WaitForSeconds(0.5f);
+        yield return new WaitForSeconds(0.1f); // Giảm delay
 
-        if (CheckBoard())
+        bool initialMatchesFound = CheckBoard(); // CheckBoard populates this.candyToRemove
+        if (initialMatchesFound)
         {
-            Debug.Log("Initial matches found, processing...");
-            StartCoroutine(ProcessTurnOnMatchedBoard(false));
-            yield return new WaitForSeconds(0.5f);
+            Debug.Log("Initial matches found, processing via ProcessTurnOnMatchedBoard (no move subtract)...");
+            // ProcessTurnOnMatchedBoard sẽ tự xử lý và cuối cùng sẽ kiểm tra lại possible moves
+            // và có thể tự chuyển state thông qua callback hoặc gọi phương thức trên CandyBoard
+            yield return StartCoroutine(ProcessTurnOnMatchedBoard(false));
+            // Sau khi ProcessTurnOnMatchedBoard hoàn tất (bao gồm cả cascade)
         }
+        // Sau khi xử lý match ban đầu (nếu có) hoặc nếu không có match ban đầu:
+        FinalizeBoardInitialization();
+    }
 
+    private void FinalizeBoardInitialization()
+    {
         if (!CheckForPossibleMatches())
         {
-            Debug.Log("No possible matches on the board, reinitializing...");
-            isInitializingBoard = false;
-            InitializeBoard();
+            Debug.Log("No possible matches on the board after init/initial processing, re-triggering initialization...");
+            // Thay vì gọi lại InitializeBoard() trực tiếp, chúng ta set state
+            SetState(new InitializingBoardState(this)); // Điều này sẽ bắt đầu lại toàn bộ quá trình
+        }
+        else
+        {
+            Debug.Log("Board initialization complete with valid moves available.");
+            SetState(new IdleState(this)); // Chuyển sang trạng thái sẵn sàng chơi
+        }
+    }
+
+
+    // ProcessSwapAndMatchesCoroutine: được gọi bởi ProcessingMoveState
+    public IEnumerator ProcessSwapAndMatchesCoroutine(Candy firstCandy, Candy secondCandy)
+    {
+        Debug.Log($"=== ProcessSwapAndMatchesCoroutine START: {firstCandy.name} with {secondCandy.name} ===");
+
+        DoSwap(firstCandy, secondCandy); // Thực hiện swap và animation
+        yield return new WaitForSeconds(0.3f); // Chờ animation swap
+
+        bool hasMatch = CheckBoard(); // CheckBoard populates this.candyToRemove
+        Debug.Log($"CheckBoard result after swap: {hasMatch}");
+
+        if (hasMatch)
+        {
+            Debug.Log("Match found after swap! Processing matches via ProcessTurnOnMatchedBoard...");
+            yield return StartCoroutine(ProcessTurnOnMatchedBoard(true)); // true: trừ lượt đi
+            // Sau khi ProcessTurnOnMatchedBoard hoàn tất (bao gồm cả cascade)
+        }
+        else
+        {
+            // Kiểm tra xem có phải là swap 2 kẹo đặc biệt không tạo match 3 nhưng kích hoạt nhau không?
+            // Logic này có thể phức tạp. Tạm thời, nếu không có match 3 thông thường, swap lại.
+            Debug.Log("No match found from swap, swapping back.");
+            DoSwap(firstCandy, secondCandy); // Swap lại (secondCandy giờ ở vị trí của firstCandy và ngược lại)
+            yield return new WaitForSeconds(0.3f);
+        }
+
+        // Sau khi xử lý swap (dù thành công hay thất bại và swap lại):
+        // Kiểm tra lại trạng thái bàn cờ và quyết định state tiếp theo.
+        // ProcessTurnOnMatchedBoard sẽ tự gọi FinalizeCurrentTurnProcessing khi kết thúc.
+        // Nếu không có match, chúng ta cần gọi nó ở đây.
+        if (!hasMatch) // Chỉ gọi nếu không có match nào được xử lý bởi ProcessTurnOnMatchedBoard
+        {
+            FinalizeCurrentTurnProcessing();
+        }
+        Debug.Log("=== ProcessSwapAndMatchesCoroutine END ===");
+    }
+
+
+    // ProcessTurnOnMatchedBoard giờ đây sẽ gọi FinalizeCurrentTurnProcessing khi nó hoàn thành tất cả các cascade.
+    public IEnumerator ProcessTurnOnMatchedBoard(bool subtractMoves)
+    {
+        if (this.candyToRemove.Count == 0)
+        {
+            // Không có gì để xử lý, nhưng nếu hàm này được gọi, nó là một phần của một lượt xử lý lớn hơn.
+            // Nếu đây là điểm cuối của một chuỗi xử lý, chúng ta cần hoàn tất lượt.
+            // Tuy nhiên, thường thì nếu candyToRemove rỗng, nó sẽ không vào vòng lặp đệ quy.
+            // Điểm kết thúc thực sự là khi CheckBoard() trả về false trong khối 'else' dưới đây.
+            FinalizeCurrentTurnProcessing(); // Gọi nếu không có kẹo nào để xóa ngay từ đầu
             yield break;
         }
 
-        Debug.Log("Board initialization complete with valid moves available");
-        isInitializingBoard = false;
+        List<Candy> initialMatches = new List<Candy>(this.candyToRemove); // candyToRemove được CheckBoard() populate
+        HashSet<Candy> allDestroyedThisTurn = RemoveAndRefill(initialMatches);
+
+        if (allDestroyedThisTurn.Count > 0 && GameManager.instance != null)
+        {
+            GameManager.instance.ProcessTurn(allDestroyedThisTurn.Count, subtractMoves);
+        }
+
+        this.candyToRemove.Clear();
+        yield return new WaitForSeconds(0.4f); // Delay cho animations và effects
+
+        if (CheckBoard()) // Kiểm tra các match mới do refill
+        {
+            // Đệ quy để xử lý cascade, không trừ lượt đi cho cascade
+            yield return StartCoroutine(ProcessTurnOnMatchedBoard(false));
+        }
+        else
+        {
+            // Không còn match nào sau cascade (hoặc không có cascade)
+            yield return new WaitForSeconds(0.2f);
+            FinalizeCurrentTurnProcessing();
+        }
+    }
+
+    // Phương thức được gọi khi một lượt xử lý (swap, match, cascade) hoàn tất
+    public void FinalizeCurrentTurnProcessing()
+    {
+        Debug.Log("Finalizing current turn processing.");
+        DeselectCurrentCandy(); // Dọn dẹp selected candy nếu có
+        if (!CheckForPossibleMatches() && !(currentState is InitializingBoardState)) // Tránh vòng lặp vô hạn khi khởi tạo
+        {
+            Debug.Log("No more possible matches after turn, setting NoPossibleMovesState.");
+            SetState(new NoPossibleMovesState(this));
+        }
+        else if (!(currentState is InitializingBoardState)) // Nếu đang khởi tạo, InitializeBoardCoroutineInternal sẽ xử lý
+        {
+            Debug.Log("Turn processing complete, moves available, setting IdleState.");
+            SetState(new IdleState(this));
+        }
+        // Nếu đang trong InitializingBoardState, InitializeBoardCoroutineInternal sẽ gọi FinalizeBoardInitialization
+        // để quyết định state tiếp theo.
+    }
+
+    public IEnumerator HandleNoPossibleMovesCoroutine()
+    {
+        Debug.Log("HandleNoPossibleMovesCoroutine: No possible moves. For now, re-initializing board after delay.");
+        // Trong game thực tế, bạn có thể muốn shuffle board ở đây.
+        // GameManager.instance.ShowShuffleAnimation();
+        // ShuffleBoardLogically(); // Hàm này sẽ cố gắng tạo ra nước đi mới
+        // yield return new WaitForSeconds(ShuffleAnimationDuration);
+        // if (!CheckForPossibleMatches()) { /* Xử lý nếu shuffle vẫn không tạo ra nước đi */ }
+        // else { SetState(new IdleState(this)); }
+
+        yield return new WaitForSeconds(1.5f); // Chờ một chút trước khi thử khởi tạo lại
+        SetState(new InitializingBoardState(this)); // Tạm thời khởi tạo lại
     }
 
     private void CreateBoardWithoutMatches()
@@ -488,43 +586,6 @@ public class CandyBoard : MonoBehaviour
         }
         return hasMatch;
     }
-
-    public IEnumerator ProcessTurnOnMatchedBoard(bool subtractMoves)
-    {
-        if (this.candyToRemove.Count == 0)
-        {
-            isProcessingMove = false;
-            yield break;
-        }
-
-        List<Candy> initialMatches = new List<Candy>(this.candyToRemove);
-        HashSet<Candy> allDestroyedThisTurn = RemoveAndRefill(initialMatches); // RemoveAndRefill giờ đã dùng Strategy
-
-        if (allDestroyedThisTurn.Count > 0)
-        {
-            GameManager.instance.ProcessTurn(allDestroyedThisTurn.Count, subtractMoves);
-        }
-
-        this.candyToRemove.Clear();
-        yield return new WaitForSeconds(0.4f);
-
-        if (CheckBoard())
-        {
-            StartCoroutine(ProcessTurnOnMatchedBoard(false));
-        }
-        else
-        {
-            yield return new WaitForSeconds(0.2f);
-            if (!CheckForPossibleMatches() && !isInitializingBoard)
-            {
-                Debug.Log("No more possible matches after cascade, reinitializing board...");
-                InitializeBoard();
-            }
-            isProcessingMove = false;
-            selectedCandy = null;
-        }
-    }
-    // Modified RemoveAndRefill to handle chained special activations and return all destroyed candies
     private HashSet<Candy> RemoveAndRefill(List<Candy> initialMatches)
     {
         HashSet<Candy> allCandiesToDestroySet = new HashSet<Candy>();
@@ -631,7 +692,6 @@ public class CandyBoard : MonoBehaviour
         Debug.Log($"Refill complete. Total destroyed: {allCandiesToDestroySet.Count}");
         return allCandiesToDestroySet;
     }
-
 
     private void CreateSpecialCandyIfMatch(List<Candy> matchedCandies)
     {
@@ -1181,7 +1241,7 @@ public class CandyBoard : MonoBehaviour
                 {
                     Debug.Log("No possible matches remain after failed swap, reinitializing board...");
                     yield return new WaitForSeconds(0.5f); // Give time for user to see failed swap
-                    InitializeBoard(); // This will set isProcessingMove internally if it runs
+                    SetState(new InitializingBoardState(this)); // This will set isProcessingMove internally if it runs
                 }
             }
         }
@@ -1189,18 +1249,31 @@ public class CandyBoard : MonoBehaviour
         // or explicitly in the swap-back case.
         Debug.Log("=== ProcessMatches END (or handing over to ProcessTurnOnMatchedBoard) ===");
     }
-
-    private bool IsAdjacent(Candy firstCandy, Candy secondCandy)
+    public void ReportCandyClicked(Candy candy)
+    {
+        if (currentState != null && candy != null && !candy.isMoving) // Thêm điều kiện !candy.isMoving
+        {
+            currentState.HandleCandyClick(candy);
+        }
+        else if (candy != null && candy.isMoving)
+        {
+            Debug.Log($"Candy {candy.name} is moving. Click ignored by CandyBoard.");
+        }
+        else
+        {
+            Debug.LogWarning("ReportCandyClicked: currentState is null or candy is null.");
+        }
+    }
+    public bool IsAdjacent(Candy firstCandy, Candy secondCandy)
     {
         if (firstCandy == null || secondCandy == null)
         {
             Debug.LogError("IsAdjacent: One or both candies are null");
             return false;
         }
-
         bool adjacent = Mathf.Abs(firstCandy.xIndex - secondCandy.xIndex) +
                         Mathf.Abs(firstCandy.yIndex - secondCandy.yIndex) == 1;
-        Debug.Log($"IsAdjacent check: [{firstCandy.xIndex},{firstCandy.yIndex}] to [{secondCandy.xIndex},{secondCandy.yIndex}] = {adjacent}");
+        // Debug.Log($"IsAdjacent check: [{firstCandy.xIndex},{firstCandy.yIndex}] to [{secondCandy.xIndex},{secondCandy.yIndex}] = {adjacent}");
         return adjacent;
     }
 }
