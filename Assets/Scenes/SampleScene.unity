@@ -216,7 +216,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 0.2, y: 0.2, z: 0.2}
+  m_LocalScale: {x: 0.55, y: 0.55, z: 0.55}
   m_ConstrainProportionsScale: 1
   m_Children: []
   m_Father: {fileID: 0}
@@ -1568,29 +1568,13 @@ MonoBehaviour:
   spaceingX: 0
   spaceingY: 0
   spacingScale: 1.1
-  candyPrefab:
+  candyPrefabs:
   - {fileID: 3939527605857352177, guid: 38092738483cdeb4c9b5c549d19b6045, type: 3}
   - {fileID: 5522963162319307860, guid: 1a3e3d3b560fa194a9d996aff7587253, type: 3}
   - {fileID: 6611521531083608616, guid: d65d7bf506c88794bbb9b9f800e5848c, type: 3}
   - {fileID: 3074768587222930122, guid: 2bb01f6e9a54e5246bd71a2b1f76c759, type: 3}
   - {fileID: 5937152101282392489, guid: d664bdbefd97fab46937f99a8aec6d59, type: 3}
   - {fileID: 5850356763111794963, guid: f4208941783e2f045b86a9167f930aab, type: 3}
-  candyBoardGO: {fileID: 876688497}
-  candyToDestroy: []
-  candyParent: {fileID: 103663256}
-  selectedCandy: {fileID: 0}
-  isProcessingMove: 0
-  candyToRemove: []
-  arrayLayout:
-    rows:
-    - row: 000000000000
-    - row: 000000000000
-    - row: 000000000000
-    - row: 000000000000
-    - row: 000000000000
-    - row: 000000000000
-    - row: 000000000000
-    - row: 000000000000
   rowClearerPrefabs:
   - {fileID: 8821945798723669960, guid: cb9cd5e1d43df7f4fa85d2223bb27867, type: 3}
   - {fileID: 667928789011074661, guid: 48c8d6ad80f291e4dad187bae6d34cd2, type: 3}
@@ -1605,6 +1589,22 @@ MonoBehaviour:
   - {fileID: 7507596336949151529, guid: c86cb65d50b401e4d91f97c6470ec2c7, type: 3}
   - {fileID: 6708646000725403234, guid: e514dbad80043b646a0d64b5d4f23534, type: 3}
   - {fileID: 2561166017940754981, guid: c3668dcbd892bbc458115959082a8a23, type: 3}
+  candyToDestroy: []
+  candyParent: {fileID: 103663256}
+  selectedCandy: {fileID: 0}
+  isProcessingMove: 0
+  candyToRemove: []
+  _selectedCandy: {fileID: 0}
+  arrayLayout:
+    rows:
+    - row: 000000000000
+    - row: 000000000000
+    - row: 000000000000
+    - row: 000000000000
+    - row: 000000000000
+    - row: 000000000000
+    - row: 000000000000
+    - row: 000000000000
 --- !u!4 &876688499
 Transform:
   m_ObjectHideFlags: 0
@@ -1615,7 +1615,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 0.8, y: 0.8, z: 0.8}
+  m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 1
   m_Children: []
   m_Father: {fileID: 0}

@@ -9,30 +9,41 @@ public class CandyBoard : MonoBehaviour
     public float spaceingX;
     public float spaceingY;
     public float spacingScale = 1.5f;
-    public GameObject[] candyPrefab;
+    public GameObject[] candyPrefabs;
+    public GameObject[] rowClearerPrefabs;
+    public GameObject[] columnClearerPrefabs;
     public Node[,] candyBoard;
-    public GameObject candyBoardGO;
     public List<GameObject> candyToDestroy = new();
     public GameObject candyParent;
     [SerializeField] private Candy selectedCandy;
     [SerializeField] public bool isProcessingMove;
     [SerializeField] List<Candy> candyToRemove = new List<Candy>();
-    public ArrayLayout arrayLayout;
-    public static CandyBoard instance;
     private bool isInitializingBoard = false;
-    public GameObject[] rowClearerPrefabs;
-    public GameObject[] columnClearerPrefabs;
+
     [SerializeField] private Candy _selectedCandy; // Giữ lại để các state có thể truy cập nếu cần, hoặc truyền qua constructor state
 
     private IBoardState currentState; // THAY ĐỔI: Trạng thái hiện tại của board
+    public ArrayLayout arrayLayout;
+    public static CandyBoard instance;
+    private CandyFactory _candyFactory;
 
     public void Awake()
     {
         instance = this;
         ValidateSpecialPrefabs();
+        if (candyParent == null) Debug.LogError("CandyBoard Critical Error: candyParent is not assigned in Inspector!");
+        if (candyPrefabs == null || candyPrefabs.Length == 0) Debug.LogError("CandyBoard Critical Error: candyPrefabs array is not assigned or empty in Inspector!");
+        // THAY ĐỔI: Khởi tạo CandyFactory
+        _candyFactory = new CandyFactory(this.candyPrefabs, this.rowClearerPrefabs, this.columnClearerPrefabs, this.candyParent.transform);
+
     }
     public void Start()
     {
+        if (_candyFactory == null)
+        {
+            Debug.LogError("CandyFactory was not initialized in Awake. Aborting Start.");
+            return; // Không thể tiếp tục nếu factory null
+        }
         SetState(new InitializingBoardState(this));
     }
     public void SetState(IBoardState newState)
@@ -53,15 +64,15 @@ public class CandyBoard : MonoBehaviour
     }
     private void ValidateSpecialPrefabs()
     {
-        if (rowClearerPrefabs == null || rowClearerPrefabs.Length != candyPrefab.Length)
+        if (rowClearerPrefabs == null || rowClearerPrefabs.Length != candyPrefabs.Length)
         {
-            Debug.LogError("rowClearerPrefabs array is null or does not match candyPrefab length.");
+            Debug.LogError("rowClearerPrefabs array is null or does not match candyPrefabs length.");
         }
-        if (columnClearerPrefabs == null || columnClearerPrefabs.Length != candyPrefab.Length)
+        if (columnClearerPrefabs == null || columnClearerPrefabs.Length != candyPrefabs.Length)
         {
-            Debug.LogError("columnClearerPrefabs array is null or does not match candyPrefab length.");
+            Debug.LogError("columnClearerPrefabs array is null or does not match candyPrefabs length.");
         }
-        for (int i = 0; i < candyPrefab.Length; i++)
+        for (int i = 0; i < candyPrefabs.Length; i++)
         {
             if (rowClearerPrefabs[i] == null)
             {
@@ -131,37 +142,30 @@ public class CandyBoard : MonoBehaviour
         }
     }
 
-    public IEnumerator InitializeBoardCoroutineInternal() // Đổi tên để phân biệt
+    public IEnumerator InitializeBoardCoroutineInternal()
     {
         Debug.Log("Initializing board (Internal Coroutine)...");
         DeselectCurrentCandy();
-        ClearEntireBoard(); // Xóa kẹo cũ (nếu có)
+        ClearEntireBoard();
 
         candyBoard = new Node[boardWidth, boardHeight];
         spaceingX = (float)((boardWidth - 1) / 2) + 1;
         spaceingY = (float)((boardHeight - 1) / 2) - 1;
 
-        // ... (Phần kiểm tra candyPrefab, arrayLayout không đổi) ...
-        if (candyPrefab == null || candyPrefab.Length == 0) { /* ... */ yield break; }
-        // ... (các vòng lặp kiểm tra prefab, sr, sprite ...)
+        if (candyPrefabs == null || candyPrefabs.Length == 0) { Debug.LogError("candyPrefabs array is null or empty in InitializeBoard."); yield break; }
+        for (int i = 0; i < candyPrefabs.Length; i++) { /* ... (kiểm tra null, SpriteRenderer, sprite cho từng prefab) ... */ }
+        if (arrayLayout == null || arrayLayout.rows == null || arrayLayout.rows.Length != boardHeight) { Debug.LogError("arrayLayout is null or has incorrect row count."); yield break; }
+        for (int y = 0; y < boardHeight; y++) { if (arrayLayout.rows[y].row == null || arrayLayout.rows[y].row.Length != boardWidth) { Debug.LogError($"arrayLayout.rows[{y}].row is null or has incorrect length."); yield break; } }
 
-        if (arrayLayout == null || arrayLayout.rows == null || arrayLayout.rows.Length != boardHeight) { /* ... */ yield break; }
-        // ... (vòng lặp kiểm tra arrayLayout.rows[y].row ...)
+        CreateBoardWithoutMatches(); // Sẽ sử dụng factory
+        yield return new WaitForSeconds(0.1f);
 
-
-        CreateBoardWithoutMatches();
-        yield return new WaitForSeconds(0.1f); // Giảm delay
-
-        bool initialMatchesFound = CheckBoard(); // CheckBoard populates this.candyToRemove
+        bool initialMatchesFound = CheckBoard();
         if (initialMatchesFound)
         {
             Debug.Log("Initial matches found, processing via ProcessTurnOnMatchedBoard (no move subtract)...");
-            // ProcessTurnOnMatchedBoard sẽ tự xử lý và cuối cùng sẽ kiểm tra lại possible moves
-            // và có thể tự chuyển state thông qua callback hoặc gọi phương thức trên CandyBoard
             yield return StartCoroutine(ProcessTurnOnMatchedBoard(false));
-            // Sau khi ProcessTurnOnMatchedBoard hoàn tất (bao gồm cả cascade)
         }
-        // Sau khi xử lý match ban đầu (nếu có) hoặc nếu không có match ban đầu:
         FinalizeBoardInitialization();
     }
 
@@ -170,13 +174,12 @@ public class CandyBoard : MonoBehaviour
         if (!CheckForPossibleMatches())
         {
             Debug.Log("No possible matches on the board after init/initial processing, re-triggering initialization...");
-            // Thay vì gọi lại InitializeBoard() trực tiếp, chúng ta set state
-            SetState(new InitializingBoardState(this)); // Điều này sẽ bắt đầu lại toàn bộ quá trình
+            SetState(new InitializingBoardState(this));
         }
         else
         {
             Debug.Log("Board initialization complete with valid moves available.");
-            SetState(new IdleState(this)); // Chuyển sang trạng thái sẵn sàng chơi
+            SetState(new IdleState(this));
         }
     }
 
@@ -296,42 +299,35 @@ public class CandyBoard : MonoBehaviour
             for (int x = 0; x < boardWidth; x++)
             {
                 Vector3 position = new Vector3((x - spaceingX) * spacingScale, (y - spaceingY) * spacingScale, 0);
-                if (arrayLayout.rows[y].row[x])
+                if (arrayLayout.rows[y].row[x]) // Vị trí bị chặn
                 {
                     candyBoard[x, y] = new Node(false, null);
                 }
                 else
                 {
                     List<int> availableTypes = GetAvailableCandyTypes(x, y);
-                    if (availableTypes.Count == 0)
+                    if (availableTypes.Count == 0) // Nếu không có type nào để tránh match, lấy bất kỳ
                     {
                         availableTypes = new List<int>();
-                        for (int i = 0; i < candyPrefab.Length; i++)
-                        {
-                            availableTypes.Add(i);
-                        }
+                        for (int i = 0; i < this.candyPrefabs.Length; i++) availableTypes.Add(i);
                     }
-
                     int randomIndex = availableTypes[Random.Range(0, availableTypes.Count)];
-                    GameObject candy = Instantiate(candyPrefab[randomIndex], position, Quaternion.identity);
-                    candy.transform.SetParent(candyParent.transform);
-                    if (candy == null)
+                    CandyType typeToCreate = (CandyType)randomIndex;
+
+                    // THAY ĐỔI: Sử dụng CandyFactory
+                    Candy newCandy = _candyFactory.CreateRegularCandy(typeToCreate, x, y, position);
+
+                    if (newCandy != null)
                     {
-                        Debug.LogError($"Failed to instantiate candy at [{x},{y}]");
-                        continue;
+                        candyBoard[x, y] = new Node(true, newCandy.gameObject);
+                        candyToDestroy.Add(newCandy.gameObject); // Vẫn thêm GO vào list này để ClearEntireBoard
+                        // Debug.Log($"Created candy via factory at [{x},{y}] type {newCandy.candyType}");
                     }
-                    Candy candyComponent = candy.GetComponent<Candy>();
-                    if (candyComponent == null)
+                    else
                     {
-                        Debug.LogError($"Candy at [{x},{y}] is missing Candy component.");
-                        Destroy(candy);
-                        continue;
+                        Debug.LogError($"Failed to create candy via factory at [{x},{y}] for type {typeToCreate}. Board position will be empty or bugged.");
+                        candyBoard[x, y] = new Node(true, null); // Đánh dấu là usable nhưng null candy
                     }
-                    candyComponent.setIndicies(x, y);
-                    candyComponent.Init(x, y, (CandyType)randomIndex);
-                    candyBoard[x, y] = new Node(true, candy);
-                    candyToDestroy.Add(candy);
-                    Debug.Log($"Created candy at [{x},{y}] with type {candyComponent.candyType}, indices [{candyComponent.xIndex},{candyComponent.yIndex}]");
                 }
             }
         }
@@ -340,7 +336,7 @@ public class CandyBoard : MonoBehaviour
     private List<int> GetAvailableCandyTypes(int x, int y)
     {
         List<int> availableTypes = new List<int>();
-        for (int i = 0; i < candyPrefab.Length; i++)
+        for (int i = 0; i < candyPrefabs.Length; i++)
         {
             availableTypes.Add(i);
         }
@@ -695,136 +691,89 @@ public class CandyBoard : MonoBehaviour
 
     private void CreateSpecialCandyIfMatch(List<Candy> matchedCandies)
     {
-        if (matchedCandies == null || matchedCandies.Count < 4)
-            return;
+        if (matchedCandies == null || matchedCandies.Count < 4) return;
 
+        // Sắp xếp để lấy kẹo trung tâm dễ hơn (nếu cần)
+        // Hoặc dựa vào selectedCandy nếu swap tạo ra match này
+        Candy primaryCandy = matchedCandies[0]; // Kẹo làm mốc
+        if (_selectedCandy != null && matchedCandies.Contains(_selectedCandy))
+        {
+            primaryCandy = _selectedCandy; // Ưu tiên kẹo được người chơi tương tác
+        }
+        else if (matchedCandies.Count > 0)
+        {
+            // Lấy kẹo ở giữa hoặc kẹo có index nhỏ nhất làm vị trí tạo kẹo đặc biệt
+            // Sắp xếp theo x rồi y để lấy kẹo "đầu tiên" trong match
+            matchedCandies.Sort((c1, c2) => {
+                int compareX = c1.xIndex.CompareTo(c2.xIndex);
+                return compareX != 0 ? compareX : c1.yIndex.CompareTo(c2.yIndex);
+            });
+            primaryCandy = matchedCandies[matchedCandies.Count / 2]; // Kẹo ở giữa
+        }
+
+
+        int specialX = primaryCandy.xIndex;
+        int specialY = primaryCandy.yIndex;
+        CandyType originalType = primaryCandy.candyType;
+        Vector3 specialPosition = primaryCandy.transform.position; // Sử dụng vị trí của kẹo bị thay thế
+
+        // Kiểm tra hướng match (đơn giản hóa)
         bool isHorizontalMatch = true;
         int firstY = matchedCandies[0].yIndex;
-        foreach (Candy candy in matchedCandies)
-        {
-            if (candy.yIndex != firstY)
-            {
-                isHorizontalMatch = false;
-                break;
-            }
-        }
+        foreach (Candy c in matchedCandies) if (c.yIndex != firstY) { isHorizontalMatch = false; break; }
 
         bool isVerticalMatch = true;
         int firstX = matchedCandies[0].xIndex;
-        foreach (Candy candy in matchedCandies)
+        foreach (Candy c in matchedCandies) if (c.xIndex != firstX) { isVerticalMatch = false; break; }
+
+        Candy newSpecialCandy = null;
+        if (matchedCandies.Count >= 4) // Chỉ tạo kẹo đặc biệt cho match từ 4 trở lên
         {
-            if (candy.xIndex != firstX)
+            // Ưu tiên match theo chiều dài hơn
+            if (isHorizontalMatch && isVerticalMatch) // L-shape or T-shape, hoặc 5+ cross
             {
-                isVerticalMatch = false;
-                break;
+                //CreateRowClearerCandy;
+
+                if (isHorizontalMatch) // Ưu tiên ngang nếu cả hai đều là line (ít xảy ra với logic hiện tại)
+                {
+                    newSpecialCandy = _candyFactory.CreateSpecialCandy(originalType, SpecialCandyEffect.ClearRow, specialX, specialY, specialPosition);
+                }
+                else if (isVerticalMatch)
+                {
+                    newSpecialCandy = _candyFactory.CreateSpecialCandy(originalType, SpecialCandyEffect.ClearColumn, specialX, specialY, specialPosition);
+                }
+            }
+            else if (isHorizontalMatch)
+            {
+                newSpecialCandy = _candyFactory.CreateSpecialCandy(originalType, SpecialCandyEffect.ClearRow, specialX, specialY, specialPosition);
+            }
+            else if (isVerticalMatch)
+            {
+                newSpecialCandy = _candyFactory.CreateSpecialCandy(originalType, SpecialCandyEffect.ClearColumn, specialX, specialY, specialPosition);
             }
         }
 
-        if (!isHorizontalMatch && !isVerticalMatch)
-            return;
 
-        Candy centerCandy = matchedCandies[matchedCandies.Count / 2];
-        int specialX = centerCandy.xIndex;
-        int specialY = centerCandy.yIndex;
-        CandyType originalType = centerCandy.candyType;
-
-        matchedCandies.Remove(centerCandy);
-
-        if (isHorizontalMatch)
+        if (newSpecialCandy != null)
         {
-            CreateRowClearerCandy(specialX, specialY, originalType);
-        }
-        else if (isVerticalMatch)
-        {
-            CreateColumnClearerCandy(specialX, specialY, originalType);
-        }
-    }
+            Debug.Log($"Created special candy {newSpecialCandy.name} at [{specialX},{specialY}] to replace {primaryCandy.name}");
 
-    private void CreateRowClearerCandy(int x, int y, CandyType originalType)
-    {
-        GameObject specialCandyPrefab = GetSpecialCandyPrefab(originalType, true);
-        if (specialCandyPrefab == null)
-        {
-            Debug.LogError($"No special candy prefab found for type {originalType} (row clearer)");
-            return;
-        }
-
-        Vector3 position = new Vector3(
-            (x - spaceingX) * spacingScale,
-            (y - spaceingY) * spacingScale,
-            0
-        );
-
-        GameObject specialCandy = Instantiate(specialCandyPrefab, position, Quaternion.identity);
-        specialCandy.transform.SetParent(candyParent.transform);
-
-        Candy candyComponent = specialCandy.GetComponent<Candy>();
-        candyComponent.setIndicies(x, y);
-        candyComponent.Init(x, y, originalType, true, SpecialCandyEffect.ClearRow);
-
-        if (candyBoard[x, y].candy != null)
-        {
-            Destroy(candyBoard[x, y].candy);
-        }
-        candyBoard[x, y] = new Node(true, specialCandy);
-        candyToDestroy.Add(specialCandy);
-
-        Debug.Log($"Created LongHorizontal candy at [{x},{y}] with type {originalType}");
-    }
-
-    private void CreateColumnClearerCandy(int x, int y, CandyType originalType)
-    {
-        GameObject specialCandyPrefab = GetSpecialCandyPrefab(originalType, false);
-        if (specialCandyPrefab == null)
-        {
-            Debug.LogError($"No special candy prefab found for type {originalType} (column clearer)");
-            return;
-        }
-
-        Vector3 position = new Vector3(
-            (x - spaceingX) * spacingScale,
-            (y - spaceingY) * spacingScale,
-            0
-        );
-
-        GameObject specialCandy = Instantiate(specialCandyPrefab, position, Quaternion.identity);
-        specialCandy.transform.SetParent(candyParent.transform);
-
-        Candy candyComponent = specialCandy.GetComponent<Candy>();
-        candyComponent.setIndicies(x, y);
-        candyComponent.Init(x, y, originalType, true, SpecialCandyEffect.ClearColumn);
-
-        if (candyBoard[x, y].candy != null)
-        {
-            Destroy(candyBoard[x, y].candy);
-        }
-        candyBoard[x, y] = new Node(true, specialCandy);
-        candyToDestroy.Add(specialCandy);
-
-        Debug.Log($"Created LongVertical candy at [{x},{y}] with type {originalType}");
-    }
-
-    private GameObject GetSpecialCandyPrefab(CandyType type, bool isRowClearer)
-    {
-        if (isRowClearer)
-        {
-            if (rowClearerPrefabs != null && rowClearerPrefabs.Length > (int)type && rowClearerPrefabs[(int)type] != null)
+            if (candyBoard[specialX, specialY].candy == primaryCandy.gameObject || candyBoard[specialX, specialY].candy == null)
             {
-                return rowClearerPrefabs[(int)type];
+
+                candyBoard[specialX, specialY].candy = newSpecialCandy.gameObject;
+                candyToDestroy.Add(newSpecialCandy.gameObject); // Thêm kẹo mới vào danh sách để quản lý (nếu cần)
+            }
+            else
+            {
+                Debug.LogWarning($"Special candy creation: Board at [{specialX},{specialY}] was not {primaryCandy.name}. It was {candyBoard[specialX, specialY].candy?.name}. Special candy might be orphaned or replace wrong candy.");
+                // Fallback: cố gắng đặt nó, nhưng có thể có lỗi logic ở đây
+                if (candyBoard[specialX, specialY].candy != null) Destroy(candyBoard[specialX, specialY].candy); // Hủy cái đang ở đó
+                candyBoard[specialX, specialY].candy = newSpecialCandy.gameObject;
+                candyToDestroy.Add(newSpecialCandy.gameObject);
             }
         }
-        else
-        {
-            if (columnClearerPrefabs != null && columnClearerPrefabs.Length > (int)type && columnClearerPrefabs[(int)type] != null)
-            {
-                return columnClearerPrefabs[(int)type];
-            }
-        }
-
-        Debug.LogError($"No special candy prefab found for {type}!");
-        return null;
     }
-
     private void CollapseColumn(int x)
     {
         for (int y = 0; y < boardHeight - 1; y++)
@@ -861,41 +810,40 @@ public class CandyBoard : MonoBehaviour
         {
             if (candyBoard[x, y].isUsable && candyBoard[x, y].candy == null)
             {
-                List<int> availableTypes = GetAvailableCandyTypes(x, y);
+                List<int> availableTypes = GetAvailableCandyTypes(x, y); // Đảm bảo không tạo match mới ngay
                 if (availableTypes.Count == 0)
                 {
                     availableTypes = new List<int>();
-                    for (int i = 0; i < candyPrefab.Length; i++)
-                    {
-                        availableTypes.Add(i);
-                    }
+                    for (int i = 0; i < this.candyPrefabs.Length; i++) availableTypes.Add(i);
                 }
-
                 int randomIndex = availableTypes[Random.Range(0, availableTypes.Count)];
+                CandyType typeToCreate = (CandyType)randomIndex;
 
+                // Vị trí spawn kẹo (thường là ở trên cùng cột, ngoài màn hình)
                 Vector3 spawnPos = new Vector3(
                     (x - spaceingX) * spacingScale,
-                    (boardHeight - spaceingY + y) * spacingScale,
-                    0
-                );
-
+                    (boardHeight - spaceingY) * spacingScale, // Spawn ở vị trí Y cao nhất của board (hoặc cao hơn)
+                    0);
+                // Vị trí đích của kẹo
                 Vector3 targetPos = new Vector3(
                     (x - spaceingX) * spacingScale,
                     (y - spaceingY) * spacingScale,
-                    0
-                );
+                    0);
 
-                GameObject newCandy = Instantiate(candyPrefab[randomIndex], spawnPos, Quaternion.identity);
-                newCandy.transform.SetParent(candyParent.transform);
-                Candy candyComponent = newCandy.GetComponent<Candy>();
-                candyComponent.setIndicies(x, y);
-                candyComponent.Init(x, y, (CandyType)randomIndex);
-                candyComponent.MoveToTarget(targetPos);
+                // THAY ĐỔI: Sử dụng CandyFactory (Instantiate tại spawnPos)
+                Candy newCandy = _candyFactory.CreateRegularCandy(typeToCreate, x, y, spawnPos);
 
-                candyBoard[x, y] = new Node(true, newCandy);
-                candyToDestroy.Add(newCandy);
-
-                Debug.Log($"Created new candy at column X: {x}, row Y: {y}");
+                if (newCandy != null)
+                {
+                    newCandy.MoveToTarget(targetPos); // Di chuyển kẹo đến vị trí đích
+                    candyBoard[x, y] = new Node(true, newCandy.gameObject);
+                    candyToDestroy.Add(newCandy.gameObject);
+                    // Debug.Log($"Filled empty space at [{x},{y}] with new candy {newCandy.candyType}");
+                }
+                else
+                {
+                    Debug.LogError($"Failed to create candy via factory for refill at [{x},{y}].");
+                }
             }
         }
     }
