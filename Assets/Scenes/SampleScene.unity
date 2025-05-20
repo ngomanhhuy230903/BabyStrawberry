@@ -1605,6 +1605,7 @@ MonoBehaviour:
     - row: 000000000000
     - row: 000000000000
     - row: 000000000000
+  initialPoolSizePerType: 5
 --- !u!4 &876688499
 Transform:
   m_ObjectHideFlags: 0

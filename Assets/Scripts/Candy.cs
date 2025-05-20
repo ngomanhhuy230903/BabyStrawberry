@@ -90,46 +90,50 @@ public class Candy : MonoBehaviour
             _effectStrategy = new NoEffectStrategy();
         }
     }
-
     public void Init(int xIndex, int yIndex, CandyType type, bool isSpecial = false, SpecialCandyEffect effect = SpecialCandyEffect.None)
     {
+        // Quan trọng: Đảm bảo GameObject active khi lấy từ pool và Init
+        if (!gameObject.activeSelf)
+        {
+            gameObject.SetActive(true);
+        }
+
         this.xIndex = xIndex;
         this.yIndex = yIndex;
         this.candyType = type;
         this.isSpecial = isSpecial;
-        this.specialEffect = effect; // Giữ lại enum
+        this.specialEffect = effect;
         isMatched = false;
         isMoving = false;
 
-        // THAY ĐỔI: Gán strategy dựa trên effect
-        SetStrategyBasedOnEffect(effect);
-
-        Debug.Log($"Candy initialized: {candyType} at [{xIndex},{yIndex}], isSpecial: {isSpecial}, specialEffect: {effect}, strategy: {_effectStrategy.GetType().Name}");
-
-        if (spriteRenderer == null)
+        // Reset SpriteRenderer (quan trọng cho pooling)
+        if (spriteRenderer == null) spriteRenderer = GetComponent<SpriteRenderer>(); // Đảm bảo cache
+        if (spriteRenderer != null)
         {
-            spriteRenderer = GetComponent<SpriteRenderer>();
+            spriteRenderer.color = Color.white; // Reset màu về mặc định (hoặc màu prefab gốc)
+            // Nếu prefab có sprite khác nhau cho các loại kẹo, bạn cần logic để set đúng sprite ở đây
+            // hoặc đảm bảo prefab được lấy từ pool đã có sprite đúng.
+            // Ví dụ: spriteRenderer.sprite = GetSpriteForType(type);
         }
 
+        SetStrategyBasedOnEffect(effect); // Gán strategy
+
+        // Đặt tên GameObject (giữ nguyên logic đặt tên của bạn)
         if (isSpecial)
         {
-            if (effect == SpecialCandyEffect.ClearRow)
-            {
-                gameObject.name = $"LongHorizontal_{type}_{xIndex}_{yIndex}";
-            }
-            else if (effect == SpecialCandyEffect.ClearColumn)
-            {
-                gameObject.name = $"LongVertical_{type}_{xIndex}_{yIndex}";
-            }
+            if (effect == SpecialCandyEffect.ClearRow) gameObject.name = $"Special_Row_{type}_{xIndex}_{yIndex}";
+            else if (effect == SpecialCandyEffect.ClearColumn) gameObject.name = $"Special_Col_{type}_{xIndex}_{yIndex}";
+            // ... các loại special khác
+            else gameObject.name = $"Special_Unknown_{type}_{xIndex}_{yIndex}";
         }
         else
         {
             gameObject.name = $"Candy_{type}_{xIndex}_{yIndex}";
-            if (spriteRenderer != null)
-            {
-                spriteRenderer.color = Color.white;
-            }
         }
+
+        // Dừng tất cả coroutine từ lần sử dụng trước (rất quan trọng cho pooling)
+        StopAllCoroutines();
+        // Debug.Log($"Candy Init: {gameObject.name}, Active: {gameObject.activeSelf}");
     }
     private void SetStrategyBasedOnEffect(SpecialCandyEffect effect)
     {
