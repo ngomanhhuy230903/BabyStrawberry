@@ -190,11 +190,6 @@ public class CandyFactory
         }
 
         GameObject prefabOrigin = null; // Cần xác định prefab gốc của candy này
-        // Cách đơn giản nhất là dựa vào tên của GameObject gốc mà pool đã tạo.
-        // Hoặc bạn có thể thêm một trường `originalPrefabName` vào Candy component khi nó được Init từ pool.
-        // Ví dụ: candy.originalPrefabName = GetPoolKey(prefabToUse); trong GetCandyFromPool
-
-        // Để đơn giản, giả sử chúng ta có thể tìm prefab dựa trên loại và hiệu ứng
         int typeIndex = (int)candy.candyType;
 
         if (candy.isSpecial)

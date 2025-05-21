@@ -160,13 +160,7 @@ public class Candy : MonoBehaviour
             Debug.LogWarning($"ExecuteSpecialEffectLogic called on non-special candy or null strategy: {name}");
             return new List<Candy>(); // Trả về danh sách rỗng nếu không phải special hoặc không có strategy
         }
-
-        // Kích hoạt hiệu ứng hình ảnh (flash, beam visuals)
-        // Hàm này giờ chỉ tập trung vào hình ảnh
         ActivateSpecialEffectAndPlayVisuals();
-
-        // Ủy thác logic cốt lõi cho strategy
-        // Strategy sẽ cập nhật allCandiesToDestroySet và trả về các kẹo mới bị ảnh hưởng
         return _effectStrategy.Activate(board, this, allCandiesToDestroySet);
     }
     public void setIndicies(int xIndex, int yIndex)
@@ -175,7 +169,6 @@ public class Candy : MonoBehaviour
         this.xIndex = xIndex;
         this.yIndex = yIndex;
 
-        // Update gameObject name to reflect new indices
         if (isSpecial)
         {
             if (specialEffect == SpecialCandyEffect.ClearRow)
@@ -309,15 +302,10 @@ public class Candy : MonoBehaviour
         rowBeam.transform.position = this.transform.position; // Centered on the special candy
 
         SpriteRenderer beamRenderer = rowBeam.AddComponent<SpriteRenderer>();
-        // Configure your beam's appearance (sprite, color, scale, etc.)
-        // Example:
         beamRenderer.color = new Color(1f, 0.8f, 0.2f, 0.7f); // Orange-ish
                                                               // Adjust scale to cover the row. You might need to get board dimensions from CandyBoard.instance
         float beamWidth = CandyBoard.instance.boardWidth * CandyBoard.instance.spacingScale;
         beamRenderer.transform.localScale = new Vector3(beamWidth, 0.3f * CandyBoard.instance.spacingScale, 1f);
-        // Assign a sprite if you have one, e.g., a white square or a custom beam sprite
-        // beamRenderer.sprite = Resources.Load<Sprite>("PathToYourBeamSprite");
-
         float duration = 0.3f; // Visual effect duration
         float time = 0;
         while (time < duration)
