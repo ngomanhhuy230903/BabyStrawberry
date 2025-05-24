@@ -147,12 +147,11 @@ public class CandyBoard : MonoBehaviour
     {
         Debug.Log("Initializing board (Internal Coroutine)...");
         DeselectCurrentCandy();
-        // ClearEntireBoard(); // Nên gọi ClearBoardForReinitialization để xử lý pool đúng cách
-        ClearBoardForReinitialization(); // Sử dụng hàm mới để dọn dẹp triệt để hơn
+        ClearEntireBoard();
 
         candyBoard = new Node[boardWidth, boardHeight];
-        spaceingX = (float)((boardWidth - 1) / 2) + 1; // spacingX và Y nên là số float
-        spaceingY = (float)((boardHeight - 1) / 2) - 1; // Điều chỉnh nếu logic của bạn khác
+        spaceingX = (float)((boardWidth - 1) / 2) + 1;
+        spaceingY = (float)((boardHeight - 1) / 2) - 1;
 
         if (candyPrefabs == null || candyPrefabs.Length == 0) { Debug.LogError("candyPrefabs array is null or empty in InitializeBoard."); yield break; }
         for (int i = 0; i < candyPrefabs.Length; i++) { /* ... (kiểm tra null, SpriteRenderer, sprite cho từng prefab) ... */ }
@@ -160,44 +159,27 @@ public class CandyBoard : MonoBehaviour
         for (int y = 0; y < boardHeight; y++) { if (arrayLayout.rows[y].row == null || arrayLayout.rows[y].row.Length != boardWidth) { Debug.LogError($"arrayLayout.rows[{y}].row is null or has incorrect length."); yield break; } }
 
         CreateBoardWithoutMatches(); // Sẽ sử dụng factory
-        yield return new WaitForSeconds(0.1f); // Thời gian nhỏ để kẹo ổn định (nếu có animation spawn ban đầu)
+        yield return new WaitForSeconds(0.1f);
 
         bool initialMatchesFound = CheckBoard();
         if (initialMatchesFound)
         {
             Debug.Log("Initial matches found, processing via ProcessTurnOnMatchedBoard (no move subtract)...");
             yield return StartCoroutine(ProcessTurnOnMatchedBoard(false));
-            // ProcessTurnOnMatchedBoard sẽ gọi FinalizeBoardInitialization hoặc cascade
         }
-        else
-        {
-            FinalizeBoardInitialization(); // Gọi nếu không có match ban đầu
-        }
-        // GameEvents.TriggerBoardInitialized(); // Sẽ được gọi trong FinalizeBoardInitialization
+        FinalizeBoardInitialization();
     }
-
 
     private void FinalizeBoardInitialization()
     {
-        // Sau khi tất cả các cascade ban đầu (nếu có) đã xử lý xong
-        if (GameManager.instance != null && GameManager.instance.isGameOver)
-        {
-            Debug.Log("Board initialization finalizing, but game is already over.");
-            // Có thể chuyển sang một trạng thái "đóng băng" cho board
-            SetState(new IdleState(this)); // Hoặc một BoardGameOverState mới
-            return;
-        }
-
         if (!CheckForPossibleMatches())
         {
             Debug.Log("No possible matches on the board after init/initial processing, re-triggering initialization...");
-            GameEvents.TriggerNoPossibleMoves(); // Thông báo trước khi khởi tạo lại
             SetState(new InitializingBoardState(this));
         }
         else
         {
             Debug.Log("Board initialization complete with valid moves available.");
-            GameEvents.TriggerBoardInitialized(); // Thông báo bảng đã sẵn sàng
             SetState(new IdleState(this));
         }
     }
@@ -218,6 +200,7 @@ public class CandyBoard : MonoBehaviour
         {
             Debug.Log("Match found after swap! Processing matches via ProcessTurnOnMatchedBoard...");
             yield return StartCoroutine(ProcessTurnOnMatchedBoard(true)); // true: trừ lượt đi
+            // Sau khi ProcessTurnOnMatchedBoard hoàn tất (bao gồm cả cascade)
         }
         else
         {
@@ -236,55 +219,33 @@ public class CandyBoard : MonoBehaviour
     // ProcessTurnOnMatchedBoard giờ đây sẽ gọi FinalizeCurrentTurnProcessing khi nó hoàn thành tất cả các cascade.
     public IEnumerator ProcessTurnOnMatchedBoard(bool subtractMoves)
     {
-        if (this.candyToRemove.Count == 0 && !(currentState is InitializingBoardState))
+        if (this.candyToRemove.Count == 0)
         {
-            FinalizeCurrentTurnProcessing();
-            yield break;
-        }
-        if (this.candyToRemove.Count == 0 && (currentState is InitializingBoardState))
-        {
-            // Nếu đang khởi tạo và không có gì để xóa, vẫn cần FinalizeBoardInitialization
-            FinalizeBoardInitialization();
+            FinalizeCurrentTurnProcessing(); // Gọi nếu không có kẹo nào để xóa ngay từ đầu
             yield break;
         }
 
+        List<Candy> initialMatches = new List<Candy>(this.candyToRemove); // candyToRemove được CheckBoard() populate
+        HashSet<Candy> allDestroyedThisTurn = RemoveAndRefill(initialMatches);
 
-        List<Candy> initialMatches = new List<Candy>(this.candyToRemove);
-        HashSet<Candy> allDestroyedThisTurn = RemoveAndRefill(initialMatches); // RemoveAndRefill trả về HashSet<Candy>
-
-        if (allDestroyedThisTurn.Count > 0) // Chỉ xử lý nếu có kẹo bị phá hủy
+        if (allDestroyedThisTurn.Count > 0 && GameManager.instance != null)
         {
-            // Chuyển HashSet sang List nếu signature của event yêu cầu
-            List<Candy> destroyedList = new List<Candy>(allDestroyedThisTurn);
-            GameEvents.TriggerCandiesMatchedAndDestroyed(destroyedList); // Phát sự kiện kẹo bị phá hủy
-
-            if (GameManager.instance != null)
-            {
-                GameManager.instance.ProcessTurn(allDestroyedThisTurn.Count, subtractMoves);
-            }
+            GameManager.instance.ProcessTurn(allDestroyedThisTurn.Count, subtractMoves);
         }
 
         this.candyToRemove.Clear();
-        yield return new WaitForSeconds(0.4f); // Chờ animation và effect
+        yield return new WaitForSeconds(0.4f); // Delay cho animations và effects
 
-        if (CheckBoard()) // Kiểm tra match mới do refill (cascade)
+        if (CheckBoard()) // Kiểm tra các match mới do refill
         {
-            yield return StartCoroutine(ProcessTurnOnMatchedBoard(false)); // Đệ quy, không trừ lượt cho cascade
+            // Đệ quy để xử lý cascade, không trừ lượt đi cho cascade
+            yield return StartCoroutine(ProcessTurnOnMatchedBoard(false));
         }
         else
         {
             // Không còn match nào sau cascade (hoặc không có cascade)
             yield return new WaitForSeconds(0.2f);
-            // Nếu đang trong quá trình khởi tạo, InitializeBoardCoroutineInternal sẽ gọi FinalizeBoardInitialization.
-            // Nếu không phải, gọi FinalizeCurrentTurnProcessing.
-            if (!(currentState is InitializingBoardState))
-            {
-                FinalizeCurrentTurnProcessing();
-            }
-            else
-            {
-                FinalizeBoardInitialization(); // Đảm bảo quá trình khởi tạo hoàn tất đúng cách
-            }
+            FinalizeCurrentTurnProcessing();
         }
     }
 
@@ -292,34 +253,24 @@ public class CandyBoard : MonoBehaviour
     public void FinalizeCurrentTurnProcessing()
     {
         Debug.Log("Finalizing current turn processing.");
-        DeselectCurrentCandy();
-
-        if (GameManager.instance != null && GameManager.instance.isGameOver)
-        {
-            Debug.Log("Game is over, CandyBoard will transition to Idle (or a GameOver state). No further checks for moves.");
-            if (!(currentState is IdleState)) SetState(new IdleState(this)); // Hoặc BoardGameOverState
-            return;
-        }
-
+        DeselectCurrentCandy(); // Dọn dẹp selected candy nếu có
         if (!CheckForPossibleMatches() && !(currentState is InitializingBoardState)) // Tránh vòng lặp vô hạn khi khởi tạo
         {
             Debug.Log("No more possible matches after turn, setting NoPossibleMovesState.");
-            GameEvents.TriggerNoPossibleMoves(); // Phát sự kiện không còn nước đi
             SetState(new NoPossibleMovesState(this));
         }
         else if (!(currentState is InitializingBoardState)) // Nếu đang khởi tạo, InitializeBoardCoroutineInternal sẽ xử lý
         {
             Debug.Log("Turn processing complete, moves available, setting IdleState.");
-            GameEvents.TriggerBoardRefilled(); // Phát sự kiện bảng đã được lấp đầy và ổn định
             SetState(new IdleState(this));
         }
-        // Nếu là InitializingBoardState, FinalizeBoardInitialization sẽ được gọi từ ProcessTurnOnMatchedBoard hoặc InitializeBoardCoroutineInternal
+        // Nếu đang trong InitializingBoardState, InitializeBoardCoroutineInternal sẽ gọi FinalizeBoardInitialization
+        // để quyết định state tiếp theo.
     }
 
     public IEnumerator HandleNoPossibleMovesCoroutine()
     {
-        Debug.Log("HandleNoPossibleMovesCoroutine: No possible moves. Re-initializing board after delay.");
-        // GameEvents.TriggerNoPossibleMoves(); // Đã được phát bởi FinalizeCurrentTurnProcessing
+        Debug.Log("HandleNoPossibleMovesCoroutine: No possible moves. For now, re-initializing board after delay.");
         yield return new WaitForSeconds(1.5f); // Chờ một chút trước khi thử khởi tạo lại
         SetState(new InitializingBoardState(this)); // Tạm thời khởi tạo lại
     }
@@ -633,84 +584,80 @@ public class CandyBoard : MonoBehaviour
     }
     private HashSet<Candy> RemoveAndRefill(List<Candy> initialMatches)
     {
-        HashSet<Candy> allCandiesToDestroySet = new HashSet<Candy>();
-        Queue<Candy> processQueue = new Queue<Candy>();
-        List<Candy> specialCandiesActivatedThisCycle = new List<Candy>();
+        HashSet<Candy> allCandiesToDestroySet = new HashSet<Candy>(); // Những kẹo sẽ bị loại bỏ trong lượt này
+        Queue<Candy> processQueue = new Queue<Candy>(); // Hàng đợi xử lý kẹo (đặc biệt là kẹo special)
+        List<Candy> specialCandiesActivatedThisCycle = new List<Candy>(); // Tránh kích hoạt lặp lại kẹo special
 
+        // Thêm các kẹo từ initialMatches vào hàng đợi xử lý
         foreach (Candy candy in initialMatches)
         {
             if (candy != null && candy.gameObject.activeSelf && allCandiesToDestroySet.Add(candy))
             {
                 processQueue.Enqueue(candy);
-                candy.isMatched = true;
+                candy.isMatched = true; // Đánh dấu đã khớp
             }
         }
 
+        // Xử lý hiệu ứng của kẹo special trong hàng đợi
         while (processQueue.Count > 0)
         {
             Candy currentCandy = processQueue.Dequeue();
             if (currentCandy == null || !currentCandy.gameObject.activeSelf) continue;
 
-            if (currentCandy.isSpecial && !specialCandiesActivatedThisCycle.Contains(currentCandy))
+            if (currentCandy.isSpecial &&
+                !specialCandiesActivatedThisCycle.Contains(currentCandy)) // Chỉ kích hoạt nếu chưa làm trong chu kỳ này
             {
+                // Debug.Log($"RemoveAndRefill: Processing special effect for {currentCandy.name}.");
                 specialCandiesActivatedThisCycle.Add(currentCandy);
-                // ExecuteSpecialEffectLogic nên nhận allCandiesToDestroySet để cập nhật trực tiếp
+
+                // ExecuteSpecialEffectLogic sẽ cập nhật allCandiesToDestroySet và trả về các kẹo *mới* bị ảnh hưởng
                 List<Candy> newlyAffectedBySpecial = currentCandy.ExecuteSpecialEffectLogic(this, allCandiesToDestroySet);
 
-                foreach (Candy newlyHitCandy in newlyAffectedBySpecial) // newlyAffectedBySpecial là những kẹo MỚI bị ảnh hưởng
+                foreach (Candy newlyHitCandy in newlyAffectedBySpecial)
                 {
-                    // allCandiesToDestroySet.Add(newlyHitCandy) sẽ tự xử lý trùng lặp
-                    // và chỉ thêm nếu newlyHitCandy chưa có trong set.
                     if (newlyHitCandy != null && newlyHitCandy.gameObject.activeSelf && allCandiesToDestroySet.Add(newlyHitCandy))
                     {
-                        newlyHitCandy.isMatched = true;
+                        newlyHitCandy.isMatched = true; // Đảm bảo đánh dấu
                         if (newlyHitCandy.isSpecial && !processQueue.Contains(newlyHitCandy) && !specialCandiesActivatedThisCycle.Contains(newlyHitCandy))
                         {
+                            // Debug.Log($"RemoveAndRefill: Queuing chained special candy: {newlyHitCandy.name}");
                             processQueue.Enqueue(newlyHitCandy);
                         }
                     }
                 }
             }
         }
-        // Gọi CreateSpecialCandyIfMatch trước khi thực sự loại bỏ kẹo khỏi board và pool
-        // để nó có thể quyết định vị trí tạo kẹo đặc biệt dựa trên các kẹo sắp bị phá hủy.
-        CreateSpecialCandyIfMatch(initialMatches, allCandiesToDestroySet);
 
+        CreateSpecialCandyIfMatch(initialMatches, allCandiesToDestroySet);
 
         HashSet<int> columnsToRefill = new HashSet<int>();
         if (allCandiesToDestroySet.Count > 0)
         {
+            // Debug.Log($"RemoveAndRefill: Candies marked for destruction: {allCandiesToDestroySet.Count}");
             foreach (Candy candyToReturn in allCandiesToDestroySet)
             {
                 if (candyToReturn == null || !candyToReturn.gameObject.activeSelf) continue;
 
                 int xIndex = candyToReturn.xIndex;
                 int yIndex = candyToReturn.yIndex;
+                columnsToRefill.Add(xIndex);
 
-                // Kiểm tra xIndex, yIndex hợp lệ trước khi truy cập candyBoard
-                if (xIndex >= 0 && xIndex < boardWidth && yIndex >= 0 && yIndex < boardHeight)
+                if (candyBoard[xIndex, yIndex].candy == candyToReturn.gameObject)
                 {
-                    columnsToRefill.Add(xIndex);
-                    if (candyBoard[xIndex, yIndex] != null && candyBoard[xIndex, yIndex].candy == candyToReturn.gameObject)
-                    {
-                        candyBoard[xIndex, yIndex].candy = null; // Xóa tham chiếu khỏi bảng logic
-                    }
+                    candyBoard[xIndex, yIndex].candy = null;
                 }
-                else
-                {
-                    Debug.LogWarning($"Candy {candyToReturn.name} has invalid indices [{xIndex},{yIndex}] during RemoveAndRefill. Skipping board nullification for this candy, but will still attempt to pool it.");
-                }
-                _candyFactory.ReturnCandyToPool(candyToReturn); // Trả kẹo về pool
+                // Dù thế nào, kẹo trong allCandiesToDestroySet cũng cần được trả về pool.
+                _candyFactory.ReturnCandyToPool(candyToReturn);
             }
         }
 
+        // Thu gọn cột và lấp đầy khoảng trống
         foreach (int x in columnsToRefill.Distinct()) // Đảm bảo không xử lý trùng cột
         {
             CollapseColumn(x);
             FillEmptySpacesInColumn(x);
         }
-        // GameEvents.TriggerBoardRefilled(); // Sẽ được gọi ở mức cao hơn (FinalizeCurrentTurnProcessing) khi board đã ổn định
-        return allCandiesToDestroySet; // Trả về tập hợp các kẹo đã bị phá hủy
+        return allCandiesToDestroySet; // Trả về tập hợp các kẹo đã bị phá hủy (đã được trả về pool)
     }
 
     private void CreateSpecialCandyIfMatch(List<Candy> matchedCandiesFromOriginalMatch, HashSet<Candy> allCandiesCurrentlyBeingDestroyed)
