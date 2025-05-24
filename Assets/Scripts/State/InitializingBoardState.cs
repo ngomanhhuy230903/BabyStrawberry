@@ -1,11 +1,10 @@
-﻿// InitializingBoardState.cs
-using UnityEngine;
-using System.Collections; // Cần cho IEnumerator
+﻿using UnityEngine;
+using System.Collections;
 
 public class InitializingBoardState : IBoardState
 {
     private readonly CandyBoard _board;
-    private Coroutine _initializationProcessCoroutine; // Đổi tên để rõ ràng hơn
+    private Coroutine _initializationProcessCoroutine;
 
     public InitializingBoardState(CandyBoard board)
     {
@@ -25,7 +24,7 @@ public class InitializingBoardState : IBoardState
         }
 
         Debug.Log("===== Entering InitializingBoardState =====");
-        _board.isProcessingMove = true; // Đánh dấu board đang bận, ngăn các tương tác khác
+        // BỎ: _board.isProcessingMove = true; -> Trạng thái này tự nó đã là một "cờ" báo bận.
 
         if (_board.gameObject.activeInHierarchy)
         {
@@ -34,9 +33,7 @@ public class InitializingBoardState : IBoardState
         else
         {
             Debug.LogWarning("InitializingBoardState: CandyBoard GameObject is not active. Cannot start initialization sequence.");
-            // Nếu board không active, không thể làm gì nhiều, có thể chuyển về Idle hoặc một state lỗi.
-            _board.isProcessingMove = false; // Reset cờ
-            // _board.SetState(new IdleState(_board)); // Hoặc một state an toàn khác
+            // BỎ: _board.isProcessingMove = false;
         }
     }
 
@@ -44,21 +41,20 @@ public class InitializingBoardState : IBoardState
     {
         // 1. Dọn dẹp board cũ
         Debug.Log("InitializingBoardState: Starting board cleanup phase.");
-        // Giả sử bạn có hàm này trong CandyBoard và nó xử lý việc trả kẹo về pool
-        _board.ClearBoardForReinitialization();
+        // THAY ĐỔI: Sử dụng phương thức dọn dẹp còn lại trong CandyBoard
+        _board.ClearEntireBoard();
+
         // 2. Khởi tạo board mới
         Debug.Log("InitializingBoardState: Starting new board generation phase.");
         yield return _board.StartCoroutine(_board.InitializeBoardCoroutineInternal());
 
         Debug.Log("InitializingBoardState: FullInitializationSequence completed.");
-
     }
 
     public void OnExit()
     {
         Debug.Log("===== Exiting InitializingBoardState =====");
-        // Dừng coroutine bao bọc nếu nó vẫn đang chạy khi state thay đổi đột ngột
-        // (mặc dù lý tưởng là nó nên tự hoàn thành và chuyển state).
+        // Dừng coroutine nếu nó vẫn đang chạy khi state thay đổi đột ngột.
         if (_initializationProcessCoroutine != null && _board != null && _board.gameObject.activeInHierarchy)
         {
             _board.StopCoroutine(_initializationProcessCoroutine);
@@ -68,13 +64,11 @@ public class InitializingBoardState : IBoardState
 
     public void HandleCandyClick(Candy candy)
     {
-        // Không cho phép click khi đang khởi tạo
-        // Debug.Log("InitializingBoardState: Board is initializing. Candy click ignored.");
+        // Không cho phép click khi đang khởi tạo. Logic này đúng và không cần thay đổi.
     }
 
     public void UpdateState()
     {
-        // Thường không cần logic update phức tạp ở đây,
-        // trừ khi bạn muốn hiển thị hiệu ứng loading hoặc kiểm tra timeout.
+        // Không cần logic update ở đây.
     }
 }

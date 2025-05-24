@@ -2,21 +2,15 @@
 using System.Collections.Generic;
 using UnityEngine;
 
+// Enums giữ nguyên, không cần thay đổi
 public enum CandyType
 {
-    Red,
-    Yellow,
-    Green,
-    Purple,
-    Blue,
-    Orange
+    Red, Yellow, Green, Purple, Blue, Orange
 }
 
 public enum SpecialCandyEffect
 {
-    None,
-    ClearRow,
-    ClearColumn
+    None, ClearRow, ClearColumn
 }
 
 public class Candy : MonoBehaviour
@@ -30,73 +24,36 @@ public class Candy : MonoBehaviour
     [SerializeField] public SpecialCandyEffect specialEffect;
 
     private SpriteRenderer spriteRenderer;
-    private ISpecialCandyEffectStrategy _effectStrategy; // THAY ĐỔI: Trường giữ strategy
-
+    private ISpecialCandyEffectStrategy _effectStrategy;
 
     void Awake()
     {
-        if (gameObject == null)
-        {
-            Debug.LogError("GameObject is null in Candy.Awake");
-            return;
-        }
-        Debug.Log($"Candy {name} Awake, GameObject: {gameObject.name}");
+        spriteRenderer = GetComponent<SpriteRenderer>();
+        if (spriteRenderer == null) Debug.LogError($"Candy {name} is missing SpriteRenderer component.");
+        if (spriteRenderer != null && spriteRenderer.sprite == null) Debug.LogError($"Candy {name} has SpriteRenderer but no sprite assigned.");
 
-        Collider2D collider2D = GetComponent<Collider2D>();
-        if (collider2D == null)
+        // Đảm bảo có Collider2D
+        if (GetComponent<Collider2D>() == null)
         {
-            Debug.Log("Adding BoxCollider2D to Candy");
+            Debug.LogWarning($"Candy {name} is missing Collider2D, adding one automatically.");
             BoxCollider2D boxCollider = gameObject.AddComponent<BoxCollider2D>();
-            spriteRenderer = GetComponent<SpriteRenderer>();
             if (spriteRenderer != null && spriteRenderer.sprite != null)
             {
-                Debug.Log($"SpriteRenderer found: {spriteRenderer.name}, Sprite: {spriteRenderer.sprite.name}");
-                boxCollider.size = new Vector2(
-                    spriteRenderer.bounds.size.x,
-                    spriteRenderer.bounds.size.y
-                );
+                boxCollider.size = spriteRenderer.bounds.size;
             }
             else
             {
-                Debug.LogWarning($"Candy {name} is missing SpriteRenderer or sprite, using default collider size.");
-                boxCollider.size = new Vector2(1f, 1f);
+                boxCollider.size = Vector2.one;
             }
-        }
-        else
-        {
-            Debug.Log($"Candy {name} already has a Collider2D: {collider2D.GetType().Name}");
         }
 
-        spriteRenderer = GetComponent<SpriteRenderer>();
-        if (spriteRenderer == null)
-        {
-            Debug.LogError($"Candy {name} is missing SpriteRenderer component.");
-        }
-        else
-        {
-            Debug.Log($"SpriteRenderer found: {spriteRenderer.name}");
-            if (spriteRenderer.sprite == null)
-            {
-                Debug.LogError($"Candy {name} has SpriteRenderer but no sprite assigned.");
-            }
-            else
-            {
-                Debug.Log($"Sprite assigned: {spriteRenderer.sprite.name}");
-            }
-        }
         gameObject.layer = LayerMask.NameToLayer("Candy");
-        if (_effectStrategy == null)
-        {
-            _effectStrategy = new NoEffectStrategy();
-        }
+        _effectStrategy = new NoEffectStrategy(); // Gán mặc định
     }
+
     public void Init(int xIndex, int yIndex, CandyType type, bool isSpecial = false, SpecialCandyEffect effect = SpecialCandyEffect.None)
     {
-        // Quan trọng: Đảm bảo GameObject active khi lấy từ pool và Init
-        if (!gameObject.activeSelf)
-        {
-            gameObject.SetActive(true);
-        }
+        if (!gameObject.activeSelf) gameObject.SetActive(true);
 
         this.xIndex = xIndex;
         this.yIndex = yIndex;
@@ -106,35 +63,23 @@ public class Candy : MonoBehaviour
         isMatched = false;
         isMoving = false;
 
-        // Reset SpriteRenderer (quan trọng cho pooling)
-        if (spriteRenderer == null) spriteRenderer = GetComponent<SpriteRenderer>(); // Đảm bảo cache
-        if (spriteRenderer != null)
-        {
-            spriteRenderer.color = Color.white; // Reset màu về mặc định (hoặc màu prefab gốc)
-            // Nếu prefab có sprite khác nhau cho các loại kẹo, bạn cần logic để set đúng sprite ở đây
-            // hoặc đảm bảo prefab được lấy từ pool đã có sprite đúng.
-            // Ví dụ: spriteRenderer.sprite = GetSpriteForType(type);
-        }
+        if (spriteRenderer == null) spriteRenderer = GetComponent<SpriteRenderer>();
+        if (spriteRenderer != null) spriteRenderer.color = Color.white;
 
-        SetStrategyBasedOnEffect(effect); // Gán strategy
+        SetStrategyBasedOnEffect(effect);
 
-        // Đặt tên GameObject (giữ nguyên logic đặt tên của bạn)
         if (isSpecial)
         {
-            if (effect == SpecialCandyEffect.ClearRow) gameObject.name = $"Special_Row_{type}_{xIndex}_{yIndex}";
-            else if (effect == SpecialCandyEffect.ClearColumn) gameObject.name = $"Special_Col_{type}_{xIndex}_{yIndex}";
-            // ... các loại special khác
-            else gameObject.name = $"Special_Unknown_{type}_{xIndex}_{yIndex}";
+            gameObject.name = $"Special_{effect}_{type}_{xIndex}_{yIndex}";
         }
         else
         {
             gameObject.name = $"Candy_{type}_{xIndex}_{yIndex}";
         }
 
-        // Dừng tất cả coroutine từ lần sử dụng trước (rất quan trọng cho pooling)
         StopAllCoroutines();
-        // Debug.Log($"Candy Init: {gameObject.name}, Active: {gameObject.activeSelf}");
     }
+
     private void SetStrategyBasedOnEffect(SpecialCandyEffect effect)
     {
         switch (effect)
@@ -145,51 +90,35 @@ public class Candy : MonoBehaviour
             case SpecialCandyEffect.ClearColumn:
                 _effectStrategy = new ClearColumnStrategy();
                 break;
-            case SpecialCandyEffect.None:
             default:
-                _effectStrategy = new NoEffectStrategy(); // Mặc định là không có hiệu ứng
+                _effectStrategy = new NoEffectStrategy();
                 break;
         }
     }
 
-    // THAY ĐỔI: Phương thức mới để thực thi logic hiệu ứng đặc biệt
     public List<Candy> ExecuteSpecialEffectLogic(CandyBoard board, HashSet<Candy> allCandiesToDestroySet)
     {
         if (!isSpecial || _effectStrategy == null)
         {
             Debug.LogWarning($"ExecuteSpecialEffectLogic called on non-special candy or null strategy: {name}");
-            return new List<Candy>(); // Trả về danh sách rỗng nếu không phải special hoặc không có strategy
+            return new List<Candy>();
         }
         ActivateSpecialEffectAndPlayVisuals();
         return _effectStrategy.Activate(board, this, allCandiesToDestroySet);
     }
+
     public void setIndicies(int xIndex, int yIndex)
     {
-        Debug.Log($"setIndicies: Candy {candyType} from [{this.xIndex},{this.yIndex}] to [{xIndex},{yIndex}]");
         this.xIndex = xIndex;
         this.yIndex = yIndex;
-
-        if (isSpecial)
-        {
-            if (specialEffect == SpecialCandyEffect.ClearRow)
-            {
-                gameObject.name = $"LongHorizontal_{candyType}_{xIndex}_{yIndex}";
-            }
-            else if (specialEffect == SpecialCandyEffect.ClearColumn)
-            {
-                gameObject.name = $"LongVertical_{candyType}_{xIndex}_{yIndex}";
-            }
-        }
-        else
-        {
-            gameObject.name = $"Candy_{candyType}_{xIndex}_{yIndex}";
-        }
+        // Cập nhật tên để dễ debug
+        if (isSpecial) gameObject.name = $"Special_{specialEffect}_{candyType}_{xIndex}_{yIndex}";
+        else gameObject.name = $"Candy_{candyType}_{xIndex}_{yIndex}";
     }
 
     public void MoveToTarget(Vector3 targetPosition)
     {
         if (isMoving) return;
-        StopAllCoroutines();
         StartCoroutine(MoveToCoroutine(targetPosition));
     }
 
@@ -203,8 +132,7 @@ public class Candy : MonoBehaviour
         while (time < duration)
         {
             float t = time / duration;
-            float easedT = Mathf.SmoothStep(0, 1, t);
-            transform.position = Vector3.Lerp(startPosition, targetPosition, easedT);
+            transform.position = Vector3.Lerp(startPosition, targetPosition, Mathf.SmoothStep(0, 1, t));
             time += Time.deltaTime;
             yield return null;
         }
@@ -217,122 +145,69 @@ public class Candy : MonoBehaviour
     {
         if (spriteRenderer != null)
         {
-            Color currentColor = spriteRenderer.color;
-            spriteRenderer.color = selected ? new Color(currentColor.r, currentColor.g, currentColor.b, 0.7f) : new Color(currentColor.r, currentColor.g, currentColor.b, 1f);
+            spriteRenderer.color = selected ? new Color(1f, 1f, 1f, 0.7f) : Color.white;
         }
-        Debug.Log($"Candy {candyType} at [{xIndex},{yIndex}] {(selected ? "selected" : "deselected")}");
     }
 
     void OnMouseDown()
     {
-        Debug.Log($"OnMouseDown: Candy {candyType} at [{xIndex},{yIndex}], isSpecial={isSpecial}, isMoving={isMoving}");
-
-        // THAY ĐỔI: Ủy thác việc xử lý click cho CandyBoard, sau đó CandyBoard sẽ chuyển cho state hiện tại
-        if (CandyBoard.instance != null) // Không cần kiểm tra isProcessingMove ở đây nữa, state sẽ quyết định
+        if (CandyBoard.instance != null)
         {
             CandyBoard.instance.ReportCandyClicked(this);
         }
-        else
-        {
-            Debug.LogWarning($"Cannot select candy: CandyBoard.instance is null");
-        }
     }
 
-
-    public bool ValidatePosition()
-    {
-        if (CandyBoard.instance == null) return true;
-
-        Vector3 expectedPosition = new Vector3(
-            (xIndex - CandyBoard.instance.spaceingX) * CandyBoard.instance.spacingScale,
-            (yIndex - CandyBoard.instance.spaceingY) * CandyBoard.instance.spacingScale,
-            transform.position.z
-        );
-
-        float distance = Vector3.Distance(transform.position, expectedPosition);
-        return distance <= 0.1f;
-    }
-
-    // In Candy.cs
-
-    // Rename for clarity, this is now primarily for visual effects when activated by a match.
     public void ActivateSpecialEffectAndPlayVisuals()
     {
         if (!isSpecial) return;
+        StartCoroutine(PlayActivationEffect());
 
-        Debug.Log($"Playing activation visuals for: {specialEffect} at [{xIndex},{yIndex}]");
-        StartCoroutine(PlayActivationEffect()); // The flash
-
-        // Trigger the beam visuals. These should be purely visual and not call game logic.
-        if (specialEffect == SpecialCandyEffect.ClearRow)
-        {
-            Debug.Log($"Playing row clear visual effect at row {yIndex}");
-            StartCoroutine(RowClearVisualEffect());
-        }
-        else if (specialEffect == SpecialCandyEffect.ClearColumn)
-        {
-            Debug.Log($"Playing column clear visual effect at column {xIndex}");
-            StartCoroutine(ColumnClearVisualEffect());
-        }
+        if (specialEffect == SpecialCandyEffect.ClearRow) StartCoroutine(RowClearVisualEffect());
+        else if (specialEffect == SpecialCandyEffect.ClearColumn) StartCoroutine(ColumnClearVisualEffect());
     }
 
-    // This coroutine is for the initial flash/highlight of the special candy itself
     private IEnumerator PlayActivationEffect()
     {
         if (spriteRenderer != null)
         {
-            // Example: Simple flash
             Color originalColor = spriteRenderer.color;
-            spriteRenderer.color = new Color(1f, 1f, 0.5f, spriteRenderer.color.a); // Yellowish highlight
-            yield return new WaitForSeconds(0.1f);
-            spriteRenderer.color = originalColor;
-            yield return new WaitForSeconds(0.1f);
             spriteRenderer.color = new Color(1f, 1f, 0.5f, spriteRenderer.color.a);
             yield return new WaitForSeconds(0.1f);
             spriteRenderer.color = originalColor;
         }
     }
 
-    // Modified to be purely visual, NO CandyBoard.instance.ClearRow calls
     private IEnumerator RowClearVisualEffect()
     {
-        // CandyBoard.instance.ClearRow(rowIndex); // REMOVED - Logic is now in CandyBoard.RemoveAndRefill
-
         GameObject rowBeam = new GameObject("RowBeamVisual");
-        rowBeam.transform.position = this.transform.position; // Centered on the special candy
+        rowBeam.transform.position = this.transform.position;
 
         SpriteRenderer beamRenderer = rowBeam.AddComponent<SpriteRenderer>();
-        beamRenderer.color = new Color(1f, 0.8f, 0.2f, 0.7f); // Orange-ish
-                                                              // Adjust scale to cover the row. You might need to get board dimensions from CandyBoard.instance
+        beamRenderer.color = new Color(1f, 0.8f, 0.2f, 0.7f);
         float beamWidth = CandyBoard.instance.boardWidth * CandyBoard.instance.spacingScale;
-        beamRenderer.transform.localScale = new Vector3(beamWidth, 0.3f * CandyBoard.instance.spacingScale, 1f);
-        float duration = 0.3f; // Visual effect duration
+        rowBeam.transform.localScale = new Vector3(beamWidth, 0.3f * CandyBoard.instance.spacingScale, 1f);
+
+        float duration = 0.3f;
         float time = 0;
         while (time < duration)
         {
             float t = time / duration;
-            beamRenderer.color = new Color(beamRenderer.color.r, beamRenderer.color.g, beamRenderer.color.b, 0.7f * (1 - t)); // Fade out
-                                                                                                                              // Optional: Animate scale or position
+            beamRenderer.color = new Color(beamRenderer.color.r, beamRenderer.color.g, beamRenderer.color.b, 0.7f * (1 - t));
             time += Time.deltaTime;
             yield return null;
         }
         Destroy(rowBeam);
     }
 
-    // Modified to be purely visual, NO CandyBoard.instance.ClearColumn calls
     private IEnumerator ColumnClearVisualEffect()
     {
-        // CandyBoard.instance.ClearColumn(columnIndex); // REMOVED
-
         GameObject columnBeam = new GameObject("ColumnBeamVisual");
         columnBeam.transform.position = this.transform.position;
 
         SpriteRenderer beamRenderer = columnBeam.AddComponent<SpriteRenderer>();
-        beamRenderer.color = new Color(0.2f, 0.8f, 1f, 0.7f); // Bluish
+        beamRenderer.color = new Color(0.2f, 0.8f, 1f, 0.7f);
         float beamHeight = CandyBoard.instance.boardHeight * CandyBoard.instance.spacingScale;
-        beamRenderer.transform.localScale = new Vector3(0.3f * CandyBoard.instance.spacingScale, beamHeight, 1f);
-        // beamRenderer.sprite = Resources.Load<Sprite>("PathToYourBeamSprite");
-
+        columnBeam.transform.localScale = new Vector3(0.3f * CandyBoard.instance.spacingScale, beamHeight, 1f);
 
         float duration = 0.3f;
         float time = 0;
