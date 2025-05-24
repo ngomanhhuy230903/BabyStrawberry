@@ -1,4 +1,5 @@
-﻿using UnityEngine;
+﻿// InitializingBoardState.cs - Phiên bản đã sửa lỗi
+using UnityEngine;
 using System.Collections;
 
 public class InitializingBoardState : IBoardState
@@ -24,7 +25,6 @@ public class InitializingBoardState : IBoardState
         }
 
         Debug.Log("===== Entering InitializingBoardState =====");
-        // BỎ: _board.isProcessingMove = true; -> Trạng thái này tự nó đã là một "cờ" báo bận.
 
         if (_board.gameObject.activeInHierarchy)
         {
@@ -33,15 +33,26 @@ public class InitializingBoardState : IBoardState
         else
         {
             Debug.LogWarning("InitializingBoardState: CandyBoard GameObject is not active. Cannot start initialization sequence.");
-            // BỎ: _board.isProcessingMove = false;
         }
     }
 
     private IEnumerator FullInitializationSequence()
     {
+        // 0. KHỞI TẠO TRẠNG THÁI GAME -> ĐÂY LÀ BƯỚC SỬA LỖI
+        // Gọi GameManager để thiết lập điểm, lượt đi, và phát sự kiện cập nhật UI lần đầu
+        if (GameManager.instance != null)
+        {
+            Debug.Log("InitializingBoardState: Calling GameManager.Initialize() to set up game state and fire initial UI events.");
+            GameManager.instance.Initialize();
+        }
+        else
+        {
+            Debug.LogError("InitializingBoardState: GameManager.instance is null. Cannot initialize game state.");
+            yield break; // Dừng lại nếu không có GameManager
+        }
+
         // 1. Dọn dẹp board cũ
         Debug.Log("InitializingBoardState: Starting board cleanup phase.");
-        // THAY ĐỔI: Sử dụng phương thức dọn dẹp còn lại trong CandyBoard
         _board.ClearEntireBoard();
 
         // 2. Khởi tạo board mới
@@ -54,7 +65,6 @@ public class InitializingBoardState : IBoardState
     public void OnExit()
     {
         Debug.Log("===== Exiting InitializingBoardState =====");
-        // Dừng coroutine nếu nó vẫn đang chạy khi state thay đổi đột ngột.
         if (_initializationProcessCoroutine != null && _board != null && _board.gameObject.activeInHierarchy)
         {
             _board.StopCoroutine(_initializationProcessCoroutine);
@@ -62,13 +72,6 @@ public class InitializingBoardState : IBoardState
         }
     }
 
-    public void HandleCandyClick(Candy candy)
-    {
-        // Không cho phép click khi đang khởi tạo. Logic này đúng và không cần thay đổi.
-    }
-
-    public void UpdateState()
-    {
-        // Không cần logic update ở đây.
-    }
+    public void HandleCandyClick(Candy candy) { }
+    public void UpdateState() { }
 }

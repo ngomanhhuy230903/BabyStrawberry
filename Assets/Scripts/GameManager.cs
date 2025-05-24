@@ -1,5 +1,5 @@
+﻿// GameManager.cs - Phiên bản cập nhật
 using System.Collections;
-using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -7,77 +7,158 @@ using UnityEngine.SceneManagement;
 public class GameManager : MonoBehaviour
 {
     public static GameManager instance;
+
+    [Header("Game Panels")]
     public GameObject backgroundPanel;
     public GameObject victoryPanel;
     public GameObject defeatPanel;
 
-    public int goal;// the number of points you need  to win
-    public int moves;// the number of moves you have
-    public int scores;// the number of points you have
-
-    public bool isGameOver;
-
+    [Header("UI Text")]
     public TMP_Text pointText;
     public TMP_Text movesText;
     public TMP_Text goalText;
+
+    [Header("Level Settings")] // THÊM MỚI: Dữ liệu cấu hình cho level
+    public int levelMoves = 20;
+    public int levelGoal = 5000;
+
+    [Header("Game State")]
+    public int goal;
+    public int moves;
+    public int scores;
+    public bool isGameOver;
+
+    [Header("Test Mode")]
+    [Tooltip("Kích hoạt để có 9999 moves và 999999 goal")]
+    public bool isTestMode = false;
+
     private void Awake()
     {
+        if (instance == null)
+        {
             instance = this;
-    }
-    public void Initialize(int moves, int goal)
-    {
-        this.moves = moves;
-        this.goal = goal;
-        scores = 0;
-        isGameOver = false;
-    }
-    void Start()
-    {
-        
+        }
+        else
+        {
+            Destroy(gameObject);
+        }
     }
 
-    // Update is called once per frame
-    void Update()
+    private void OnEnable()
     {
-        pointText.text = "Points: " + scores.ToString();
-        movesText.text = "Moves: " + moves.ToString();
-        goalText.text = "Goal: " + goal.ToString();
+        GameEvents.OnScoreChanged.AddListener(UpdateScoreText);
+        GameEvents.OnMovesChanged.AddListener(UpdateMovesText);
+        GameEvents.OnGoalChanged.AddListener(UpdateGoalText);
+        GameEvents.OnGameWin.AddListener(HandleWinCondition);
+        GameEvents.OnGameLose.AddListener(HandleLoseCondition);
     }
-    public void ProcessTurn(int pointToGain,bool subtractMoves)
+
+    private void OnDisable()
     {
+        GameEvents.OnScoreChanged.RemoveListener(UpdateScoreText);
+        GameEvents.OnMovesChanged.RemoveListener(UpdateMovesText);
+        GameEvents.OnGoalChanged.RemoveListener(UpdateGoalText);
+        GameEvents.OnGameWin.RemoveListener(HandleWinCondition);
+        GameEvents.OnGameLose.RemoveListener(HandleLoseCondition);
+    }
+
+    // THAY ĐỔI: Hàm Initialize giờ không cần tham số
+    // Nó sẽ tự lấy giá trị từ cấu hình của level
+    public void Initialize()
+    {
+        if (isTestMode)
+        {
+            this.moves = 9999;
+            this.goal = 999999;
+            Debug.LogWarning("--- TEST MODE ACTIVATED ---");
+        }
+        else
+        {
+            this.moves = levelMoves; // Lấy từ cấu hình
+            this.goal = levelGoal;   // Lấy từ cấu hình
+        }
+
+        this.scores = 0;
+        this.isGameOver = false;
+
+        // Phát sự kiện để cập nhật UI ngay từ đầu -> ĐÂY LÀ CHÌA KHÓA
+        Debug.Log($"Initializing game with: Moves={moves}, Goal={goal}, Scores={scores}. Firing initial events.");
+        GameEvents.OnGoalChanged.Invoke(goal);
+        GameEvents.OnMovesChanged.Invoke(moves);
+        GameEvents.OnScoreChanged.Invoke(scores);
+    }
+
+    // ... (Các phần còn lại của GameManager giữ nguyên)
+    public void ProcessTurn(int pointToGain, bool subtractMoves)
+    {
+        if (isGameOver) return;
+
         scores += pointToGain;
+        GameEvents.OnScoreChanged.Invoke(scores);
+
         if (subtractMoves)
         {
             moves--;
+            GameEvents.OnMovesChanged.Invoke(moves);
         }
+
+        if (scores >= goal)
+        {
+            isGameOver = true;
+            GameEvents.OnGameWin.Invoke();
+            return;
+        }
+
         if (moves <= 0)
         {
             isGameOver = true;
-            backgroundPanel.SetActive(true);
-            victoryPanel.SetActive(true);
-            CandyBoard.instance.candyParent.SetActive(false);
-            return;
-            LoseGame();
+            GameEvents.OnGameLose.Invoke();
         }
-        if (scores >= goal)
+    }
+
+    private void HandleWinCondition()
+    {
+        Debug.Log("Game Won!");
+        backgroundPanel.SetActive(true);
+        victoryPanel.SetActive(true);
+        if (CandyBoard.instance != null && CandyBoard.instance.candyParent != null)
         {
-            //you've win the game
-            isGameOver = true;
-            backgroundPanel.SetActive(true);
-            victoryPanel.SetActive(true);
             CandyBoard.instance.candyParent.SetActive(false);
-            return;
-            WinGame();
         }
     }
-    //attached to the button to change scene when winning
-    public void WinGame()
+
+    private void HandleLoseCondition()
     {
-        SceneManager.LoadScene(0);
+        Debug.Log("Game Lost!");
+        backgroundPanel.SetActive(true);
+        defeatPanel.SetActive(true);
+        if (CandyBoard.instance != null && CandyBoard.instance.candyParent != null)
+        {
+            CandyBoard.instance.candyParent.SetActive(false);
+        }
     }
-    //attached to the button to change scene when losing
-    public void LoseGame()
+
+    #region UI Update Methods
+    private void UpdateScoreText(int newScore)
     {
-        SceneManager.LoadScene(0);
+        pointText.text = "Points: " + newScore.ToString();
     }
+
+    private void UpdateMovesText(int newMoves)
+    {
+        movesText.text = "Moves: " + newMoves.ToString();
+    }
+
+    private void UpdateGoalText(int newGoal)
+    {
+        goalText.text = "Goal: " + newGoal.ToString();
+    }
+    #endregion
+
+    #region Scene Management
+    public void ReloadScene()
+    {
+        SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+    }
+    #endregion
 }
