@@ -1,29 +1,28 @@
-﻿// ClearColumnStrategy.cs
-using System.Collections.Generic;
-using UnityEngine; // Cần cho Debug
+﻿using System.Collections.Generic;
+using UnityEngine;
 
 public class ClearColumnStrategy : ISpecialCandyEffectStrategy
 {
-    public List<Candy> Activate(CandyBoard board, Candy specialCandy, HashSet<Candy> allCandiesToDestroySet)
+    public List<Candy> Activate(CandyBoard board, Candy activatingCandy, Candy otherCandy, HashSet<Candy> allCandiesToDestroySet)
     {
-        List<Candy> newlyAffectedBySpecial = new List<Candy>();
-        Debug.Log($"Executing ClearColumnStrategy for candy at [{specialCandy.xIndex},{specialCandy.yIndex}] in column {specialCandy.xIndex}");
+        var newlyAffected = new List<Candy>();
+
+        Debug.Log($"Executing ClearColumnStrategy for candy at column {activatingCandy.xIndex}");
 
         for (int y = 0; y < board.boardHeight; y++)
         {
-            if (board.candyBoard[specialCandy.xIndex, y].isUsable && board.candyBoard[specialCandy.xIndex, y].candy != null)
+            // Kiểm tra node và candy tại vị trí trong cột
+            if (board.candyBoard[activatingCandy.xIndex, y]?.isUsable == true && board.candyBoard[activatingCandy.xIndex, y]?.candy != null)
             {
-                Candy affectedCandy = board.candyBoard[specialCandy.xIndex, y].candy.GetComponent<Candy>();
-                if (affectedCandy != null)
+                Candy affectedCandy = board.candyBoard[activatingCandy.xIndex, y].candy.GetComponent<Candy>();
+
+                // Chỉ thêm vào danh sách nếu nó chưa được xử lý
+                if (affectedCandy != null && !allCandiesToDestroySet.Contains(affectedCandy))
                 {
-                    if (allCandiesToDestroySet.Add(affectedCandy))
-                    {
-                        newlyAffectedBySpecial.Add(affectedCandy);
-                        Debug.Log($"ClearColumnStrategy added {affectedCandy.name} to destruction set.");
-                    }
+                    newlyAffected.Add(affectedCandy);
                 }
             }
         }
-        return newlyAffectedBySpecial;
+        return newlyAffected;
     }
 }

@@ -1589,10 +1589,9 @@ MonoBehaviour:
   - {fileID: 7507596336949151529, guid: c86cb65d50b401e4d91f97c6470ec2c7, type: 3}
   - {fileID: 6708646000725403234, guid: e514dbad80043b646a0d64b5d4f23534, type: 3}
   - {fileID: 2561166017940754981, guid: c3668dcbd892bbc458115959082a8a23, type: 3}
-  candyToDestroy: []
+  colorBombPrefab: {fileID: 6964291491685631844, guid: 5f5c5f4d63e94e341ab0efe2f3f7f557,
+    type: 3}
   candyParent: {fileID: 103663256}
-  selectedCandy: {fileID: 0}
-  isProcessingMove: 0
   candyToRemove: []
   _selectedCandy: {fileID: 0}
   arrayLayout:
@@ -2314,13 +2313,16 @@ MonoBehaviour:
   backgroundPanel: {fileID: 189053057}
   victoryPanel: {fileID: 1364082479}
   defeatPanel: {fileID: 293541507}
-  goal: 1000000
-  moves: 100
-  scores: 0
-  isGameOver: 0
   pointText: {fileID: 1325709772}
   movesText: {fileID: 657630853}
   goalText: {fileID: 574085525}
+  levelMoves: 20
+  levelGoal: 5000
+  goal: 10000
+  moves: 1000
+  scores: 0
+  isGameOver: 0
+  isTestMode: 1
 --- !u!4 &2041848193
 Transform:
   m_ObjectHideFlags: 0

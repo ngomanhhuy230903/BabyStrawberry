@@ -10,7 +10,12 @@ public enum CandyType
 
 public enum SpecialCandyEffect
 {
-    None, ClearRow, ClearColumn
+    None,
+    ClearRow,
+    ClearColumn,
+    ClearColor, // Match-5 tạo ra kẹo này
+    UpgradeColorToSpecials, // Hiệu ứng khi ColorBomb + kẹo đặc biệt
+    ClearBoard // Hiệu ứng khi ColorBomb + ColorBomb
 }
 
 public class Candy : MonoBehaviour
@@ -80,7 +85,7 @@ public class Candy : MonoBehaviour
         StopAllCoroutines();
     }
 
-    private void SetStrategyBasedOnEffect(SpecialCandyEffect effect)
+    public void SetStrategyBasedOnEffect(SpecialCandyEffect effect)
     {
         switch (effect)
         {
@@ -90,13 +95,23 @@ public class Candy : MonoBehaviour
             case SpecialCandyEffect.ClearColumn:
                 _effectStrategy = new ClearColumnStrategy();
                 break;
+            case SpecialCandyEffect.ClearColor:
+                _effectStrategy = new ClearColorStrategy();
+                break;
+            case SpecialCandyEffect.UpgradeColorToSpecials:
+                _effectStrategy = new UpgradeColorToSpecialsStrategy();
+                break;
+            case SpecialCandyEffect.ClearBoard:
+                _effectStrategy = new ClearBoardStrategy();
+                break;
             default:
                 _effectStrategy = new NoEffectStrategy();
                 break;
         }
     }
 
-    public List<Candy> ExecuteSpecialEffectLogic(CandyBoard board, HashSet<Candy> allCandiesToDestroySet)
+    // MODIFIED: Thêm tham số 'otherCandy' để các Strategy có thể biết đối tượng tương tác
+    public List<Candy> ExecuteSpecialEffectLogic(CandyBoard board, Candy otherCandy, HashSet<Candy> allCandiesToDestroySet)
     {
         if (!isSpecial || _effectStrategy == null)
         {
@@ -104,7 +119,8 @@ public class Candy : MonoBehaviour
             return new List<Candy>();
         }
         ActivateSpecialEffectAndPlayVisuals();
-        return _effectStrategy.Activate(board, this, allCandiesToDestroySet);
+        // Truyền 'otherCandy' vào cho strategy
+        return _effectStrategy.Activate(board, this, otherCandy, allCandiesToDestroySet);
     }
 
     public void setIndicies(int xIndex, int yIndex)

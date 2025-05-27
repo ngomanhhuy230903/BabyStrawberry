@@ -13,13 +13,14 @@ public class CandyBoard : MonoBehaviour
     public GameObject[] candyPrefabs;
     public GameObject[] rowClearerPrefabs;
     public GameObject[] columnClearerPrefabs;
+    public GameObject colorBombPrefab;
     public Node[,] candyBoard;
     public GameObject candyParent;
     [SerializeField] List<Candy> candyToRemove = new List<Candy>();
 
-    [SerializeField] private Candy _selectedCandy; // Giữ lại để các state có thể truy cập nếu cần
+    [SerializeField] private Candy _selectedCandy;
 
-    private IBoardState currentState; // Trạng thái hiện tại của board
+    private IBoardState currentState;
     public ArrayLayout arrayLayout;
     public static CandyBoard instance;
     private CandyFactory _candyFactory;
@@ -34,9 +35,9 @@ public class CandyBoard : MonoBehaviour
         if (candyParent == null) Debug.LogError("CandyBoard Critical Error: candyParent is not assigned in Inspector!");
         if (candyPrefabs == null || candyPrefabs.Length == 0) Debug.LogError("CandyBoard Critical Error: candyPrefabs array is not assigned or empty in Inspector!");
 
-        _candyFactory = new CandyFactory(this.candyPrefabs, this.rowClearerPrefabs, this.columnClearerPrefabs, this.candyParent.transform, initialPoolSizePerType);
+        _candyFactory = new CandyFactory(this.candyPrefabs, this.rowClearerPrefabs, this.columnClearerPrefabs, this.colorBombPrefab, this.candyParent.transform, initialPoolSizePerType);
     }
-
+    public CandyFactory GetCandyFactory() { return _candyFactory; }
     public void Start()
     {
         if (_candyFactory == null)
@@ -171,40 +172,51 @@ public class CandyBoard : MonoBehaviour
         }
     }
 
+    // Lưu ý: ProcessSwapAndMatchesCoroutine và ProcessTurnOnMatchedBoard đã được sửa ở lần trước, giữ nguyên
     public IEnumerator ProcessSwapAndMatchesCoroutine(Candy firstCandy, Candy secondCandy)
     {
         Debug.Log($"=== ProcessSwapAndMatchesCoroutine START: {firstCandy.name} with {secondCandy.name} ===");
-        DoSwap(firstCandy, secondCandy);
-        yield return new WaitForSeconds(0.3f);
+        bool isColorBombSwap = firstCandy.specialEffect == SpecialCandyEffect.ClearColor || secondCandy.specialEffect == SpecialCandyEffect.ClearColor;
 
-        bool hasMatch = CheckBoard();
-        Debug.Log($"CheckBoard result after swap: {hasMatch}");
-
-        if (hasMatch)
+        if (isColorBombSwap)
         {
-            Debug.Log("Match found after swap! Processing matches via ProcessTurnOnMatchedBoard...");
-            yield return StartCoroutine(ProcessTurnOnMatchedBoard(true));
+            Candy colorBomb = firstCandy.specialEffect == SpecialCandyEffect.ClearColor ? firstCandy : secondCandy;
+            Candy otherCandy = colorBomb == firstCandy ? secondCandy : firstCandy;
+            yield return new WaitForSeconds(0.1f);
+            List<Candy> initialDestructionList = new List<Candy> { colorBomb, otherCandy };
+            yield return StartCoroutine(ProcessTurnOnMatchedBoard(true, initialDestructionList, colorBomb, otherCandy));
         }
         else
         {
-            Debug.Log("No match found from swap, swapping back.");
             DoSwap(firstCandy, secondCandy);
             yield return new WaitForSeconds(0.3f);
-            FinalizeCurrentTurnProcessing(); // No match, so finalize immediately.
+
+            bool hasMatch = CheckBoard();
+            if (hasMatch)
+            {
+                yield return StartCoroutine(ProcessTurnOnMatchedBoard(true, new List<Candy>(this.candyToRemove)));
+            }
+            else
+            {
+                DoSwap(firstCandy, secondCandy);
+                yield return new WaitForSeconds(0.3f);
+                FinalizeCurrentTurnProcessing();
+            }
         }
         Debug.Log("=== ProcessSwapAndMatchesCoroutine END ===");
     }
 
-    public IEnumerator ProcessTurnOnMatchedBoard(bool subtractMoves)
+    public IEnumerator ProcessTurnOnMatchedBoard(bool subtractMoves, List<Candy> initialMatches = null, Candy activator = null, Candy target = null)
     {
-        if (this.candyToRemove.Count == 0)
+        List<Candy> candiesToProcess = initialMatches ?? new List<Candy>(this.candyToRemove);
+
+        if (candiesToProcess.Count == 0)
         {
             FinalizeCurrentTurnProcessing();
             yield break;
         }
 
-        List<Candy> initialMatches = new List<Candy>(this.candyToRemove);
-        HashSet<Candy> allDestroyedThisTurn = RemoveAndRefill(initialMatches);
+        HashSet<Candy> allDestroyedThisTurn = RemoveAndRefill(candiesToProcess, activator, target);
 
         if (allDestroyedThisTurn.Count > 0 && GameManager.instance != null)
         {
@@ -216,7 +228,7 @@ public class CandyBoard : MonoBehaviour
 
         if (CheckBoard())
         {
-            yield return StartCoroutine(ProcessTurnOnMatchedBoard(false)); // Cascade
+            yield return StartCoroutine(ProcessTurnOnMatchedBoard(false, new List<Candy>(this.candyToRemove))); // Cascade
         }
         else
         {
@@ -311,8 +323,6 @@ public class CandyBoard : MonoBehaviour
 
     public void ClearEntireBoard()
     {
-        Debug.Log("ClearEntireBoard: Initiating board clear.");
-
         if (_candyFactory != null && candyBoard != null)
         {
             for (int x = 0; x < boardWidth; x++)
@@ -322,31 +332,15 @@ public class CandyBoard : MonoBehaviour
                     if (candyBoard[x, y]?.isUsable == true && candyBoard[x, y]?.candy != null)
                     {
                         Candy candyComponent = candyBoard[x, y].candy.GetComponent<Candy>();
-                        if (candyComponent != null)
-                        {
-                            _candyFactory.ReturnCandyToPool(candyComponent);
-                        }
-                        else
-                        {
-                            Destroy(candyBoard[x, y].candy);
-                        }
+                        if (candyComponent != null) _candyFactory.ReturnCandyToPool(candyComponent);
+                        else Destroy(candyBoard[x, y].candy);
                         candyBoard[x, y].candy = null;
                     }
                 }
             }
         }
-        else if (_candyFactory == null) // Fallback
-        {
-            Debug.LogError("ClearEntireBoard: _candyFactory is null! Falling back to destroying children.");
-            if (candyParent != null)
-            {
-                foreach (Transform child in candyParent.transform) Destroy(child.gameObject);
-            }
-        }
-
         candyToRemove?.Clear();
         DeselectCurrentCandy();
-        Debug.Log("ClearEntireBoard: Board cleared and candies returned to pool.");
     }
 
     public bool CheckForPossibleMatches()
@@ -359,7 +353,6 @@ public class CandyBoard : MonoBehaviour
             {
                 if (candyBoard[x, y].isUsable && candyBoard[x + 1, y].isUsable && candyBoard[x, y].candy != null && candyBoard[x + 1, y].candy != null)
                 {
-                    // Tạm hoán đổi để kiểm tra
                     GameObject temp = candyBoard[x, y].candy;
                     candyBoard[x, y].candy = candyBoard[x + 1, y].candy;
                     candyBoard[x + 1, y].candy = temp;
@@ -370,10 +363,8 @@ public class CandyBoard : MonoBehaviour
                     int tempX2 = candy2.xIndex, tempY2 = candy2.yIndex;
                     candy1.setIndicies(x, y); candy2.setIndicies(x + 1, y);
 
-                    // Kiểm tra match
                     bool hasMatch = (IsConnected(candy1).connectionCandys.Count >= 3) || (IsConnected(candy2).connectionCandys.Count >= 3);
 
-                    // Hoán đổi lại
                     candyBoard[x + 1, y].candy = candyBoard[x, y].candy;
                     candyBoard[x, y].candy = temp;
                     candy1.setIndicies(tempX1, tempY1); candy2.setIndicies(tempX2, tempY2);
@@ -389,7 +380,6 @@ public class CandyBoard : MonoBehaviour
             {
                 if (candyBoard[x, y].isUsable && candyBoard[x, y + 1].isUsable && candyBoard[x, y].candy != null && candyBoard[x, y + 1].candy != null)
                 {
-                    // Tạm hoán đổi để kiểm tra
                     GameObject temp = candyBoard[x, y].candy;
                     candyBoard[x, y].candy = candyBoard[x, y + 1].candy;
                     candyBoard[x, y + 1].candy = temp;
@@ -400,10 +390,8 @@ public class CandyBoard : MonoBehaviour
                     int tempX2 = candy2.xIndex, tempY2 = candy2.yIndex;
                     candy1.setIndicies(x, y); candy2.setIndicies(x, y + 1);
 
-                    // Kiểm tra match
                     bool hasMatch = (IsConnected(candy1).connectionCandys.Count >= 3) || (IsConnected(candy2).connectionCandys.Count >= 3);
 
-                    // Hoán đổi lại
                     candyBoard[x, y + 1].candy = candyBoard[x, y].candy;
                     candyBoard[x, y].candy = temp;
                     candy1.setIndicies(tempX1, tempY1); candy2.setIndicies(tempX2, tempY2);
@@ -458,18 +446,42 @@ public class CandyBoard : MonoBehaviour
         return hasMatch;
     }
 
-    private HashSet<Candy> RemoveAndRefill(List<Candy> initialMatches)
+    // Hàm RemoveAndRefill đã được sửa ở lần trước, giữ nguyên
+    private HashSet<Candy> RemoveAndRefill(List<Candy> initialMatches, Candy swapActivator = null, Candy swapTarget = null)
     {
         HashSet<Candy> allCandiesToDestroySet = new HashSet<Candy>();
         Queue<Candy> processQueue = new Queue<Candy>();
-        List<Candy> specialCandiesActivatedThisCycle = new List<Candy>();
 
-        foreach (Candy candy in initialMatches)
+        if (swapActivator != null && swapActivator.specialEffect == SpecialCandyEffect.ClearColor)
         {
-            if (candy != null && candy.gameObject.activeSelf && allCandiesToDestroySet.Add(candy))
+            SpecialCandyEffect effect;
+            if (swapTarget.specialEffect == SpecialCandyEffect.ClearColor)
             {
-                processQueue.Enqueue(candy);
-                candy.isMatched = true;
+                effect = SpecialCandyEffect.ClearBoard;
+            }
+            else if (swapTarget.isSpecial)
+            {
+                effect = SpecialCandyEffect.UpgradeColorToSpecials;
+            }
+            else
+            {
+                effect = SpecialCandyEffect.ClearColor;
+            }
+
+            swapActivator.SetStrategyBasedOnEffect(effect);
+            List<Candy> affected = swapActivator.ExecuteSpecialEffectLogic(this, swapTarget, allCandiesToDestroySet);
+            foreach (var candy in affected)
+            {
+                if (allCandiesToDestroySet.Add(candy)) processQueue.Enqueue(candy);
+            }
+            allCandiesToDestroySet.Add(swapActivator);
+            allCandiesToDestroySet.Add(swapTarget);
+        }
+        else
+        {
+            foreach (Candy candy in initialMatches)
+            {
+                if (allCandiesToDestroySet.Add(candy)) processQueue.Enqueue(candy);
             }
         }
 
@@ -478,17 +490,14 @@ public class CandyBoard : MonoBehaviour
             Candy currentCandy = processQueue.Dequeue();
             if (currentCandy == null || !currentCandy.gameObject.activeSelf) continue;
 
-            if (currentCandy.isSpecial && !specialCandiesActivatedThisCycle.Contains(currentCandy))
+            if (currentCandy.isSpecial)
             {
-                specialCandiesActivatedThisCycle.Add(currentCandy);
-                List<Candy> newlyAffectedBySpecial = currentCandy.ExecuteSpecialEffectLogic(this, allCandiesToDestroySet);
-
-                foreach (Candy newlyHitCandy in newlyAffectedBySpecial)
+                if (currentCandy.specialEffect == SpecialCandyEffect.ClearRow || currentCandy.specialEffect == SpecialCandyEffect.ClearColumn)
                 {
-                    if (newlyHitCandy != null && newlyHitCandy.gameObject.activeSelf && allCandiesToDestroySet.Add(newlyHitCandy))
+                    List<Candy> newlyAffected = currentCandy.ExecuteSpecialEffectLogic(this, null, allCandiesToDestroySet);
+                    foreach (Candy newlyHitCandy in newlyAffected)
                     {
-                        newlyHitCandy.isMatched = true;
-                        if (newlyHitCandy.isSpecial && !processQueue.Contains(newlyHitCandy) && !specialCandiesActivatedThisCycle.Contains(newlyHitCandy))
+                        if (allCandiesToDestroySet.Add(newlyHitCandy))
                         {
                             processQueue.Enqueue(newlyHitCandy);
                         }
@@ -522,11 +531,11 @@ public class CandyBoard : MonoBehaviour
         }
         return allCandiesToDestroySet;
     }
-
     private void CreateSpecialCandyIfMatch(List<Candy> matchedCandiesFromOriginalMatch, HashSet<Candy> allCandiesCurrentlyBeingDestroyed)
     {
         if (matchedCandiesFromOriginalMatch == null || matchedCandiesFromOriginalMatch.Count < 4) return;
 
+        // --- Logic tìm kẹo trung tâm và tọa độ vẫn giữ nguyên ---
         Candy primaryCandy = null;
         Candy currentSelected = GetSelectedCandy();
         if (currentSelected != null && matchedCandiesFromOriginalMatch.Contains(currentSelected))
@@ -546,41 +555,52 @@ public class CandyBoard : MonoBehaviour
         CandyType originalType = primaryCandy.candyType;
         Vector3 specialPosition = new Vector3((specialX - spaceingX) * spacingScale, (specialY - spaceingY) * spacingScale, primaryCandy.transform.position.z);
 
-        bool isHorizontalMatch = matchedCandiesFromOriginalMatch.All(c => c.yIndex == matchedCandiesFromOriginalMatch[0].yIndex);
-        bool isVerticalMatch = matchedCandiesFromOriginalMatch.All(c => c.xIndex == matchedCandiesFromOriginalMatch[0].xIndex);
+        // --- LOGIC MỚI: Kiểm tra hình dạng của match ---
+        // Kiểm tra xem tất cả kẹo trong match có nằm trên cùng một hàng ngang không
+        bool isStraightHorizontal = matchedCandiesFromOriginalMatch.All(c => c.yIndex == primaryCandy.yIndex);
+        // Kiểm tra xem tất cả kẹo trong match có nằm trên cùng một hàng dọc không
+        bool isStraightVertical = matchedCandiesFromOriginalMatch.All(c => c.xIndex == primaryCandy.xIndex);
 
-        SpecialCandyEffect effectToCreate = SpecialCandyEffect.None;
-        if (matchedCandiesFromOriginalMatch.Count >= 4)
+        // -- ĐIỀU KIỆN 1: Tạo Color Bomb (Match-5 thẳng hàng) --
+        // Chỉ tạo bomb nếu match có 5 kẹo trở lên VÀ chúng nằm thẳng hàng (ngang hoặc dọc)
+        if (matchedCandiesFromOriginalMatch.Count >= 5 && (isStraightHorizontal || isStraightVertical))
         {
-            if (isHorizontalMatch && !isVerticalMatch) effectToCreate = SpecialCandyEffect.ClearRow;
-            else if (isVerticalMatch && !isHorizontalMatch) effectToCreate = SpecialCandyEffect.ClearColumn;
-            else if (isHorizontalMatch && isVerticalMatch) // L or T shape
-            {
-                // Simple logic: prefer vertical if the vertical part of the T/L is longer or equal
-                if (matchedCandiesFromOriginalMatch.Count(c => c.xIndex == specialX) >= matchedCandiesFromOriginalMatch.Count(c => c.yIndex == specialY))
-                {
-                    effectToCreate = SpecialCandyEffect.ClearColumn;
-                }
-                else
-                {
-                    effectToCreate = SpecialCandyEffect.ClearRow;
-                }
-            }
-        }
-
-        if (effectToCreate != SpecialCandyEffect.None)
-        {
-            Candy newSpecialCandy = _candyFactory.CreateSpecialCandy(originalType, effectToCreate, specialX, specialY, specialPosition);
+            Debug.Log("Creating Color Bomb due to straight line match-5.");
+            Candy newSpecialCandy = _candyFactory.CreateSpecialCandy(originalType, SpecialCandyEffect.ClearColor, specialX, specialY, specialPosition);
             if (newSpecialCandy != null)
             {
-                if (candyBoard[specialX, specialY].candy != null && candyBoard[specialX, specialY].candy != newSpecialCandy.gameObject)
+                if (candyBoard[specialX, specialY].candy != null)
                 {
-                    Debug.LogWarning($"Overwriting existing candy at [{specialX},{specialY}] to create special candy.");
                     _candyFactory.ReturnCandyToPool(candyBoard[specialX, specialY].candy.GetComponent<Candy>());
                 }
                 candyBoard[specialX, specialY].candy = newSpecialCandy.gameObject;
+                allCandiesCurrentlyBeingDestroyed.Remove(primaryCandy);
+            }
+            return; // Đã xử lý, thoát khỏi hàm
+        }
+
+        // -- ĐIỀU KIỆN 2: Tạo kẹo đặc biệt Row/Column Clearer (Match-4 thẳng hàng) --
+        // Điều kiện này chỉ được xét nếu không thỏa mãn điều kiện tạo Color Bomb
+        // Nó chỉ áp dụng cho match-4 thẳng hàng. Match T hoặc L sẽ không tạo ra kẹo đặc biệt.
+        if (matchedCandiesFromOriginalMatch.Count == 4 && (isStraightHorizontal || isStraightVertical))
+        {
+            SpecialCandyEffect effectToCreate = isStraightHorizontal ? SpecialCandyEffect.ClearRow : SpecialCandyEffect.ClearColumn;
+            Debug.Log($"Creating {effectToCreate} due to straight line match-4.");
+
+            Candy newSpecialCandy = _candyFactory.CreateSpecialCandy(originalType, effectToCreate, specialX, specialY, specialPosition);
+            if (newSpecialCandy != null)
+            {
+                if (candyBoard[specialX, specialY].candy != null)
+                {
+                    _candyFactory.ReturnCandyToPool(candyBoard[specialX, specialY].candy.GetComponent<Candy>());
+                }
+                candyBoard[specialX, specialY].candy = newSpecialCandy.gameObject;
+                allCandiesCurrentlyBeingDestroyed.Remove(primaryCandy);
             }
         }
+
+        // Nếu không thỏa mãn các điều kiện trên (ví dụ: match hình L/T, match-3), sẽ không có kẹo đặc biệt nào được tạo.
+        // Các kẹo trong match sẽ chỉ bị phá hủy bình thường.
     }
 
     private void CollapseColumn(int x)
@@ -641,35 +661,48 @@ public class CandyBoard : MonoBehaviour
 
     private MatchResult SuperMatch(MatchResult matchCandy)
     {
-        if (matchCandy.direction == MatchDirection.Horizontal || matchCandy.direction == MatchDirection.LongHorizontal)
+        if (matchCandy.direction == MatchDirection.Horizontal || matchCandy.direction == MatchDirection.LongHorizontal || matchCandy.direction == MatchDirection.Super)
         {
-            foreach (Candy candy in matchCandy.connectionCandys)
+            foreach (Candy candy in matchCandy.connectionCandys.ToList()) // ToList() để tránh lỗi thay đổi collection khi duyệt
             {
                 List<Candy> extraConnectionCandys = new List<Candy>();
                 CheckDirection(candy, Vector2Int.up, extraConnectionCandys);
                 CheckDirection(candy, Vector2Int.down, extraConnectionCandys);
                 if (extraConnectionCandys.Count >= 2)
                 {
-                    extraConnectionCandys.AddRange(matchCandy.connectionCandys);
-                    return new MatchResult() { connectionCandys = extraConnectionCandys, direction = MatchDirection.Super };
+                    foreach (var extraCandy in extraConnectionCandys)
+                    {
+                        if (!matchCandy.connectionCandys.Contains(extraCandy))
+                        {
+                            matchCandy.connectionCandys.Add(extraCandy);
+                        }
+                    }
+                    matchCandy.direction = MatchDirection.Super;
                 }
             }
         }
-        else if (matchCandy.direction == MatchDirection.Vertical || matchCandy.direction == MatchDirection.LongVertical)
+
+        if (matchCandy.direction == MatchDirection.Vertical || matchCandy.direction == MatchDirection.LongVertical || matchCandy.direction == MatchDirection.Super)
         {
-            foreach (Candy candy in matchCandy.connectionCandys)
+            foreach (Candy candy in matchCandy.connectionCandys.ToList())
             {
                 List<Candy> extraConnectionCandys = new List<Candy>();
                 CheckDirection(candy, Vector2Int.right, extraConnectionCandys);
                 CheckDirection(candy, Vector2Int.left, extraConnectionCandys);
                 if (extraConnectionCandys.Count >= 2)
                 {
-                    extraConnectionCandys.AddRange(matchCandy.connectionCandys);
-                    return new MatchResult() { connectionCandys = extraConnectionCandys, direction = MatchDirection.Super };
+                    foreach (var extraCandy in extraConnectionCandys)
+                    {
+                        if (!matchCandy.connectionCandys.Contains(extraCandy))
+                        {
+                            matchCandy.connectionCandys.Add(extraCandy);
+                        }
+                    }
+                    matchCandy.direction = MatchDirection.Super;
                 }
             }
         }
-        return matchCandy; // Return original match if not super
+        return matchCandy;
     }
 
     MatchResult IsConnected(Candy candy)
@@ -677,14 +710,21 @@ public class CandyBoard : MonoBehaviour
         List<Candy> horizontalCandys = new List<Candy> { candy };
         CheckDirection(candy, Vector2Int.right, horizontalCandys);
         CheckDirection(candy, Vector2Int.left, horizontalCandys);
-        if (horizontalCandys.Count >= 4) return new MatchResult() { connectionCandys = horizontalCandys, direction = MatchDirection.LongHorizontal };
-        if (horizontalCandys.Count == 3) return new MatchResult() { connectionCandys = horizontalCandys, direction = MatchDirection.Horizontal };
 
         List<Candy> verticalCandys = new List<Candy> { candy };
         CheckDirection(candy, Vector2Int.up, verticalCandys);
         CheckDirection(candy, Vector2Int.down, verticalCandys);
-        if (verticalCandys.Count >= 4) return new MatchResult() { connectionCandys = verticalCandys, direction = MatchDirection.LongVertical };
-        if (verticalCandys.Count == 3) return new MatchResult() { connectionCandys = verticalCandys, direction = MatchDirection.Vertical };
+
+        bool isFiveOrMoreHor = horizontalCandys.Count >= 5;
+        bool isFiveOrMoreVer = verticalCandys.Count >= 5;
+
+        if (isFiveOrMoreHor || isFiveOrMoreVer)
+        {
+            return new MatchResult() { connectionCandys = isFiveOrMoreHor ? horizontalCandys : verticalCandys, direction = MatchDirection.Super };
+        }
+
+        if (horizontalCandys.Count >= 3) return new MatchResult() { connectionCandys = horizontalCandys, direction = horizontalCandys.Count == 4 ? MatchDirection.LongHorizontal : MatchDirection.Horizontal };
+        if (verticalCandys.Count >= 3) return new MatchResult() { connectionCandys = verticalCandys, direction = verticalCandys.Count == 4 ? MatchDirection.LongVertical : MatchDirection.Vertical };
 
         return new MatchResult() { connectionCandys = new List<Candy>(), direction = MatchDirection.None };
     }

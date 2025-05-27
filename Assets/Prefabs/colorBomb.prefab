@@ -12,7 +12,7 @@ GameObject:
   - component: {fileID: 6888024139136800836}
   - component: {fileID: 8260134675757564626}
   m_Layer: 3
-  m_Name: game_item_h
+  m_Name: colorBomb
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -102,5 +102,5 @@ MonoBehaviour:
   isMoving: 0
   isMatched: 0
   candyType: 0
-  isSpecial: 0
-  specialEffect: 0
+  isSpecial: 1
+  specialEffect: 3

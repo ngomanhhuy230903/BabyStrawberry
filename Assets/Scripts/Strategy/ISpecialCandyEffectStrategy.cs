@@ -4,5 +4,5 @@ using UnityEngine; // Cần cho Debug
 
 public interface ISpecialCandyEffectStrategy
 {
-    List<Candy> Activate(CandyBoard board, Candy specialCandy, HashSet<Candy> allCandiesToDestroySet);
+    List<Candy> Activate(CandyBoard board, Candy activatingCandy, Candy otherCandy, HashSet<Candy> allCandiesToDestroySet);
 }
