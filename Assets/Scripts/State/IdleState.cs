@@ -10,32 +10,54 @@ public class IdleState : IBoardState
         _board = board;
     }
 
-    public void OnEnter()
+    public void OnEnter() // THAY ĐỔI
     {
-        Debug.Log("Entering IdleState");
-        _board.DeselectCurrentCandy(); // Đảm bảo không có kẹo nào được chọn
-        // Đảm bảo các cờ isProcessingMove (nếu còn) được reset, nhưng state đã thay thế nó
+        Debug.Log("Entering IdleState. Hint timer starting.");
+        _board.DeselectCurrentCandy();
+        _board.ResetIdleTimerAndStopHints(); // Reset bộ đếm và dừng gợi ý cũ khi vào Idle
     }
 
-    public void OnExit()
+    public void OnExit() // THAY ĐỔI
     {
-        Debug.Log("Exiting IdleState");
+        Debug.Log("Exiting IdleState.");
+        _board.ResetIdleTimerAndStopHints(); // Dừng gợi ý khi thoát khỏi Idle
     }
 
-    public void HandleCandyClick(Candy candy)
+    public void HandleCandyClick(Candy candy) // THAY ĐỔI
     {
-        if (candy == null || candy.isMoving)
+        if (candy == null || candy.isMoving || (_board.gameManager != null && _board.gameManager.isGameOver))
         {
-            Debug.LogWarning("IdleState: Clicked on null or moving candy.");
+            Debug.LogWarning("IdleState: Clicked on null, moving candy, or game is over.");
             return;
         }
-        _board.SetSelectedCandy(candy); // Lưu kẹo được chọn
+
+        _board.ResetIdleTimerAndStopHints(); // Người chơi đã tương tác, reset!
+
+        _board.SetSelectedCandy(candy);
         candy.SetSelected(true);
-        _board.SetState(new CandySelectedState(_board, candy)); // Chuyển sang trạng thái đã chọn kẹo
+        _board.SetState(new CandySelectedState(_board, candy));
     }
 
-    public void UpdateState()
+    public void UpdateState() // THAY ĐỔI HOÀN TOÀN
     {
-        // Trạng thái chờ, không làm gì đặc biệt trong Update
+        if (_board.gameManager != null && _board.gameManager.isGameOver) return;
+
+        _board._idleTimer += Time.deltaTime;
+
+        if (_board._hintAnimationCoroutine == null && _board._idleTimer >= _board.hintDelay)
+        {
+            Debug.Log("Idle time limit reached. Attempting to show hint.");
+            _board._listOfPossibleMoves = _board.FindAllPossibleMoves();
+
+            if (_board._listOfPossibleMoves.Count > 0)
+            {
+                _board._hintAnimationCoroutine = _board.StartCoroutine(_board.AnimateHintCandiesCoroutine());
+            }
+            else
+            {
+                Debug.Log("No possible moves to hint. Board might be in a no-moves state.");
+            }
+            _board._idleTimer = 0f;
+        }
     }
 }

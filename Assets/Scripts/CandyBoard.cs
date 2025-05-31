@@ -27,10 +27,28 @@ public class CandyBoard : MonoBehaviour
 
     [Header("Pooling Settings")]
     public int initialPoolSizePerType = 30;
+    // --- Biến cho Hệ thống Gợi ý ---
+    [Header("Hint System Settings")] // THÊM MỚI SECTION NÀY
+    public float hintDelay = 5f;
+    public float hintAnimationDuration = 0.6f;
+    public float hintAnimationScaleFactor = 1.15f;
+    public int maxConcurrentHints = 1;
+
+    public float _idleTimer = 0f; // THÊM MỚI (public để IdleState truy cập)
+    public Coroutine _hintAnimationCoroutine; // THÊM MỚI (public để IdleState truy cập)
+    public List<Candy[]> _listOfPossibleMoves = new List<Candy[]>(); // THÊM MỚI (public để IdleState truy cập)
+    private List<Coroutine> _activeHintAnimations = new List<Coroutine>(); // THÊM MỚI
+
+    // Tham chiếu đến GameManager
+    public GameManager gameManager; // THÊM MỚI (gán trong Inspector)
 
     public void Awake()
     {
         instance = this;
+        // THÊM MỚI: Gán GameManager nếu chưa có
+        if (gameManager == null) gameManager = FindObjectOfType<GameManager>();
+        if (gameManager == null) Debug.LogError("CandyBoard Critical Error: GameManager not found!");
+
         ValidateSpecialPrefabs();
         if (candyParent == null) Debug.LogError("CandyBoard Critical Error: candyParent is not assigned in Inspector!");
         if (candyPrefabs == null || candyPrefabs.Length == 0) Debug.LogError("CandyBoard Critical Error: candyPrefabs array is not assigned or empty in Inspector!");
@@ -77,6 +95,15 @@ public class CandyBoard : MonoBehaviour
             if (rowClearerPrefabs[i] == null) Debug.LogError($"rowClearerPrefabs[{i}] is null for candy type {(CandyType)i}.");
             if (columnClearerPrefabs[i] == null) Debug.LogError($"columnClearerPrefabs[{i}] is null for candy type {(CandyType)i}.");
         }
+        if (candyPrefabs.Length > 0) // THÊM: Kiểm tra an toàn
+        {
+            for (int i = 0; i < candyPrefabs.Length; i++)
+            {
+                // THÊM: Kiểm tra an toàn hơn cho mảng row/column clearer
+                if (rowClearerPrefabs.Length <= i || rowClearerPrefabs[i] == null) Debug.LogError($"rowClearerPrefabs[{i}] is null or out of bounds for candy type {(CandyType)i}.");
+                if (columnClearerPrefabs.Length <= i || columnClearerPrefabs[i] == null) Debug.LogError($"columnClearerPrefabs[{i}] is null or out of bounds for candy type {(CandyType)i}.");
+            }
+        }
     }
 
     public void Update()
@@ -106,9 +133,21 @@ public class CandyBoard : MonoBehaviour
             Debug.Log($"Current selectedCandy: {(_selectedCandy == null ? "null" : $"{_selectedCandy.candyType} at [{_selectedCandy.xIndex},{_selectedCandy.yIndex}]")}");
             Debug.Log($"Current Board State: {(currentState == null ? "null" : currentState.GetType().Name)}");
         }
-        if (Input.GetKeyDown(KeyCode.M))
+        if (Input.GetKeyDown(KeyCode.M)) // THAY ĐỔI: CheckForPossibleMatches giờ cập nhật _listOfPossibleMoves
         {
-            Debug.Log($"Board has possible matches: {CheckForPossibleMatches()}");
+            bool hasMoves = CheckForPossibleMatches();
+            Debug.Log($"Board has possible matches: {hasMoves}. Found {_listOfPossibleMoves.Count} moves.");
+        }
+        if (Input.GetKeyDown(KeyCode.H))
+        {
+            Debug.Log("Force showing hint via H key.");
+            ResetIdleTimerAndStopHints();
+            _listOfPossibleMoves = FindAllPossibleMoves();
+            if (_listOfPossibleMoves.Count > 0 && _hintAnimationCoroutine == null)
+            {
+                _hintAnimationCoroutine = StartCoroutine(AnimateHintCandiesCoroutine());
+            }
+            _idleTimer = 0f;
         }
 
         currentState?.UpdateState();
@@ -135,13 +174,21 @@ public class CandyBoard : MonoBehaviour
 
     public IEnumerator InitializeBoardCoroutineInternal()
     {
+        ResetIdleTimerAndStopHints(); // THÊM MỚI
         Debug.Log("Initializing board (Internal Coroutine)...");
         DeselectCurrentCandy();
         ClearEntireBoard();
 
         candyBoard = new Node[boardWidth, boardHeight];
-        spaceingX = (float)((boardWidth - 1) / 2) + 1;
-        spaceingY = (float)((boardHeight - 1) / 2) - 1;
+        // THAY ĐỔI/GỢI Ý: Cách tính toán vị trí và spacing
+        // spaceingX = (float)(boardWidth -1) / 2f * spacingScale;
+        // spaceingY = (float)(boardHeight -1) / 2f * spacingScale;
+        // Hoặc dựa trên camera:
+        // float camHeight = Camera.main.orthographicSize * 2;
+        // float camWidth = camHeight * Camera.main.aspect;
+        // spacingScale = Mathf.Min(camWidth / (boardWidth + 1), camHeight / (boardHeight + 1));
+        // Vector2 boardOrigin = new Vector2(-camWidth / 2 + spacingScale, -camHeight / 2 + spacingScale);
+
 
         if (arrayLayout == null || arrayLayout.rows == null || arrayLayout.rows.Length != boardHeight) { Debug.LogError("arrayLayout is null or has incorrect row count."); yield break; }
         for (int y = 0; y < boardHeight; y++) { if (arrayLayout.rows[y].row == null || arrayLayout.rows[y].row.Length != boardWidth) { Debug.LogError($"arrayLayout.rows[{y}].row is null or has incorrect length."); yield break; } }
@@ -152,15 +199,15 @@ public class CandyBoard : MonoBehaviour
         bool initialMatchesFound = CheckBoard();
         if (initialMatchesFound)
         {
-            Debug.Log("Initial matches found, processing via ProcessTurnOnMatchedBoard (no move subtract)...");
             yield return StartCoroutine(ProcessTurnOnMatchedBoard(false));
         }
-        FinalizeBoardInitialization();
+        FinalizeBoardInitialization(); // Sẽ gọi CheckForPossibleMatches và ResetIdleTimerAndStopHints
     }
 
     private void FinalizeBoardInitialization()
     {
-        if (!CheckForPossibleMatches())
+        ResetIdleTimerAndStopHints(); // THÊM MỚI
+        if (!CheckForPossibleMatches()) // CheckForPossibleMatches giờ sẽ cập nhật _listOfPossibleMoves
         {
             Debug.Log("No possible matches on the board after init/initial processing, re-triggering initialization...");
             SetState(new InitializingBoardState(this));
@@ -171,10 +218,10 @@ public class CandyBoard : MonoBehaviour
             SetState(new IdleState(this));
         }
     }
-
     // Lưu ý: ProcessSwapAndMatchesCoroutine và ProcessTurnOnMatchedBoard đã được sửa ở lần trước, giữ nguyên
     public IEnumerator ProcessSwapAndMatchesCoroutine(Candy firstCandy, Candy secondCandy)
     {
+        ResetIdleTimerAndStopHints(); // THÊM MỚI
         Debug.Log($"=== ProcessSwapAndMatchesCoroutine START: {firstCandy.name} with {secondCandy.name} ===");
         bool isColorBombSwap = firstCandy.specialEffect == SpecialCandyEffect.ClearColor || secondCandy.specialEffect == SpecialCandyEffect.ClearColor;
 
@@ -218,9 +265,9 @@ public class CandyBoard : MonoBehaviour
 
         HashSet<Candy> allDestroyedThisTurn = RemoveAndRefill(candiesToProcess, activator, target);
 
-        if (allDestroyedThisTurn.Count > 0 && GameManager.instance != null)
+        if (allDestroyedThisTurn.Count > 0 && gameManager != null) // THAY ĐỔI: Sử dụng biến gameManager
         {
-            GameManager.instance.ProcessTurn(allDestroyedThisTurn.Count, subtractMoves);
+            gameManager.ProcessTurn(allDestroyedThisTurn.Count, subtractMoves);
         }
 
         this.candyToRemove.Clear();
@@ -241,7 +288,9 @@ public class CandyBoard : MonoBehaviour
     {
         Debug.Log("Finalizing current turn processing.");
         DeselectCurrentCandy();
-        if (!CheckForPossibleMatches() && !(currentState is InitializingBoardState))
+        ResetIdleTimerAndStopHints(); // THÊM MỚI: Quan trọng
+
+        if (!CheckForPossibleMatches() && !(currentState is InitializingBoardState)) // CheckForPossibleMatches giờ cập nhật _listOfPossibleMoves
         {
             Debug.Log("No more possible matches after turn, setting NoPossibleMovesState.");
             SetState(new NoPossibleMovesState(this));
@@ -266,7 +315,8 @@ public class CandyBoard : MonoBehaviour
         {
             for (int x = 0; x < boardWidth; x++)
             {
-                Vector3 position = new Vector3((x - spaceingX) * spacingScale, (y - spaceingY) * spacingScale, 0);
+                // THAY ĐỔI/GỢI Ý: Cách tính toán vị trí
+                Vector3 position = new Vector3((x - (boardWidth - 1) / 2f) * spacingScale, (y - (boardHeight - 1) / 2f) * spacingScale, 0);
                 if (arrayLayout.rows[y].row[x])
                 {
                     candyBoard[x, y] = new Node(false, null);
@@ -294,6 +344,86 @@ public class CandyBoard : MonoBehaviour
                 }
             }
         }
+    }
+    public List<Candy[]> FindAllPossibleMoves()
+    {
+        if (gameManager != null && gameManager.isGameOver) return new List<Candy[]>();
+
+        List<Candy[]> possibleMoves = new List<Candy[]>();
+        if (candyBoard == null)
+        {
+            Debug.LogError("candyBoard is null in FindAllPossibleMoves.");
+            return possibleMoves;
+        }
+
+        // Kiểm tra swap ngang
+        for (int y = 0; y < boardHeight; y++)
+        {
+            for (int x = 0; x < boardWidth - 1; x++)
+            {
+                if (candyBoard[x, y]?.isUsable == true && candyBoard[x + 1, y]?.isUsable == true &&
+                    candyBoard[x, y]?.candy != null && candyBoard[x + 1, y]?.candy != null)
+                {
+                    Candy candy1Original = candyBoard[x, y].candy.GetComponent<Candy>();
+                    Candy candy2Original = candyBoard[x + 1, y].candy.GetComponent<Candy>();
+
+                    GameObject tempGO = candyBoard[x, y].candy;
+                    candyBoard[x, y].candy = candyBoard[x + 1, y].candy;
+                    candyBoard[x + 1, y].candy = tempGO;
+
+                    int originalX1 = candy1Original.xIndex, originalY1 = candy1Original.yIndex;
+                    int originalX2 = candy2Original.xIndex, originalY2 = candy2Original.yIndex;
+
+                    candy1Original.setIndicies(originalX2, originalY2);
+                    candy2Original.setIndicies(originalX1, originalY1);
+
+                    if (IsConnected(candy1Original).connectionCandys.Count >= 3 || IsConnected(candy2Original).connectionCandys.Count >= 3)
+                    {
+                        possibleMoves.Add(new Candy[] { candyBoard[x + 1, y].candy.GetComponent<Candy>(), candyBoard[x, y].candy.GetComponent<Candy>() });
+                    }
+
+                    candyBoard[x, y].candy = candy1Original.gameObject;
+                    candyBoard[x + 1, y].candy = candy2Original.gameObject;
+                    candy1Original.setIndicies(originalX1, originalY1);
+                    candy2Original.setIndicies(originalX2, originalY2);
+                }
+            }
+        }
+
+        // Kiểm tra swap dọc (tương tự như trên)
+        for (int x = 0; x < boardWidth; x++)
+        {
+            for (int y = 0; y < boardHeight - 1; y++)
+            {
+                if (candyBoard[x, y]?.isUsable == true && candyBoard[x, y + 1]?.isUsable == true &&
+                   candyBoard[x, y]?.candy != null && candyBoard[x, y + 1]?.candy != null)
+                {
+                    Candy candy1Original = candyBoard[x, y].candy.GetComponent<Candy>();
+                    Candy candy2Original = candyBoard[x, y + 1].candy.GetComponent<Candy>();
+
+                    GameObject tempGO = candyBoard[x, y].candy;
+                    candyBoard[x, y].candy = candyBoard[x, y + 1].candy;
+                    candyBoard[x, y + 1].candy = tempGO;
+
+                    int originalX1 = candy1Original.xIndex, originalY1 = candy1Original.yIndex;
+                    int originalX2 = candy2Original.xIndex, originalY2 = candy2Original.yIndex;
+
+                    candy1Original.setIndicies(originalX2, originalY2);
+                    candy2Original.setIndicies(originalX1, originalY1);
+
+                    if (IsConnected(candy1Original).connectionCandys.Count >= 3 || IsConnected(candy2Original).connectionCandys.Count >= 3)
+                    {
+                        possibleMoves.Add(new Candy[] { candyBoard[x, y + 1].candy.GetComponent<Candy>(), candyBoard[x, y].candy.GetComponent<Candy>() });
+                    }
+
+                    candyBoard[x, y].candy = candy1Original.gameObject;
+                    candyBoard[x, y + 1].candy = candy2Original.gameObject;
+                    candy1Original.setIndicies(originalX1, originalY1);
+                    candy2Original.setIndicies(originalX2, originalY2);
+                }
+            }
+        }
+        return possibleMoves;
     }
 
     private List<int> GetAvailableCandyTypes(int x, int y)
@@ -345,65 +475,121 @@ public class CandyBoard : MonoBehaviour
 
     public bool CheckForPossibleMatches()
     {
-        if (GameManager.instance.isGameOver) return false;
-
-        for (int y = 0; y < boardHeight; y++)
+        if (gameManager != null && gameManager.isGameOver) return false;
+        _listOfPossibleMoves = FindAllPossibleMoves();
+        return _listOfPossibleMoves.Count > 0;
+    }
+    // THÊM MỚI
+    public IEnumerator AnimateHintCandiesCoroutine()
+    {
+        if (_listOfPossibleMoves.Count == 0)
         {
-            for (int x = 0; x < boardWidth - 1; x++)
+            _hintAnimationCoroutine = null;
+            yield break;
+        }
+        System.Random rng = new System.Random();
+        _listOfPossibleMoves = _listOfPossibleMoves.OrderBy(a => rng.Next()).ToList();
+        StopAndClearActiveHintAnimations();
+        int hintsToActuallyShow = Mathf.Min(maxConcurrentHints, _listOfPossibleMoves.Count);
+        for (int i = 0; i < hintsToActuallyShow; i++)
+        {
+            Candy[] move = _listOfPossibleMoves[i];
+            if (move.Length == 2 && move[0] != null && move[1] != null &&
+                move[0].gameObject.activeInHierarchy && move[1].gameObject.activeInHierarchy &&
+                !move[0].isMoving && !move[1].isMoving)
             {
-                if (candyBoard[x, y].isUsable && candyBoard[x + 1, y].isUsable && candyBoard[x, y].candy != null && candyBoard[x + 1, y].candy != null)
-                {
-                    GameObject temp = candyBoard[x, y].candy;
-                    candyBoard[x, y].candy = candyBoard[x + 1, y].candy;
-                    candyBoard[x + 1, y].candy = temp;
-
-                    Candy candy1 = candyBoard[x, y].candy.GetComponent<Candy>();
-                    Candy candy2 = candyBoard[x + 1, y].candy.GetComponent<Candy>();
-                    int tempX1 = candy1.xIndex, tempY1 = candy1.yIndex;
-                    int tempX2 = candy2.xIndex, tempY2 = candy2.yIndex;
-                    candy1.setIndicies(x, y); candy2.setIndicies(x + 1, y);
-
-                    bool hasMatch = (IsConnected(candy1).connectionCandys.Count >= 3) || (IsConnected(candy2).connectionCandys.Count >= 3);
-
-                    candyBoard[x + 1, y].candy = candyBoard[x, y].candy;
-                    candyBoard[x, y].candy = temp;
-                    candy1.setIndicies(tempX1, tempY1); candy2.setIndicies(tempX2, tempY2);
-
-                    if (hasMatch) return true;
-                }
+                Coroutine anim1 = StartCoroutine(SingleCandyHintAnimation(move[0]));
+                Coroutine anim2 = StartCoroutine(SingleCandyHintAnimation(move[1]));
+                if (anim1 != null) _activeHintAnimations.Add(anim1);
+                if (anim2 != null) _activeHintAnimations.Add(anim2);
             }
         }
-
-        for (int x = 0; x < boardWidth; x++)
-        {
-            for (int y = 0; y < boardHeight - 1; y++)
-            {
-                if (candyBoard[x, y].isUsable && candyBoard[x, y + 1].isUsable && candyBoard[x, y].candy != null && candyBoard[x, y + 1].candy != null)
-                {
-                    GameObject temp = candyBoard[x, y].candy;
-                    candyBoard[x, y].candy = candyBoard[x, y + 1].candy;
-                    candyBoard[x, y + 1].candy = temp;
-
-                    Candy candy1 = candyBoard[x, y].candy.GetComponent<Candy>();
-                    Candy candy2 = candyBoard[x, y + 1].candy.GetComponent<Candy>();
-                    int tempX1 = candy1.xIndex, tempY1 = candy1.yIndex;
-                    int tempX2 = candy2.xIndex, tempY2 = candy2.yIndex;
-                    candy1.setIndicies(x, y); candy2.setIndicies(x, y + 1);
-
-                    bool hasMatch = (IsConnected(candy1).connectionCandys.Count >= 3) || (IsConnected(candy2).connectionCandys.Count >= 3);
-
-                    candyBoard[x, y + 1].candy = candyBoard[x, y].candy;
-                    candyBoard[x, y].candy = temp;
-                    candy1.setIndicies(tempX1, tempY1); candy2.setIndicies(tempX2, tempY2);
-
-                    if (hasMatch) return true;
-                }
-            }
-        }
-
-        return false;
+        yield return new WaitForSeconds(hintAnimationDuration + 0.2f);
+        _idleTimer = 0f;
+        _hintAnimationCoroutine = null;
     }
 
+    // THÊM MỚI
+    private IEnumerator SingleCandyHintAnimation(Candy candy)
+    {
+        if (candy == null || !candy.gameObject.activeInHierarchy || candy.isMoving) yield break;
+        Vector3 originalScale = candy.originalScale;
+        Vector3 targetScale = originalScale * hintAnimationScaleFactor;
+        float halfDuration = hintAnimationDuration / 2;
+        float timer = 0f;
+        while (timer < halfDuration)
+        {
+            if (candy == null || !candy.gameObject.activeInHierarchy || candy.isMoving)
+            {
+                if (candy != null) candy.transform.localScale = originalScale;
+                yield break;
+            }
+            candy.transform.localScale = Vector3.Lerp(originalScale, targetScale, timer / halfDuration);
+            timer += Time.deltaTime;
+            yield return null;
+        }
+        if (candy == null || !candy.gameObject.activeInHierarchy || candy.isMoving)
+        {
+            if (candy != null) candy.transform.localScale = originalScale;
+            yield break;
+        }
+        candy.transform.localScale = targetScale;
+        timer = 0f;
+        while (timer < halfDuration)
+        {
+            if (candy == null || !candy.gameObject.activeInHierarchy || candy.isMoving)
+            {
+                if (candy != null) candy.transform.localScale = originalScale;
+                yield break;
+            }
+            candy.transform.localScale = Vector3.Lerp(targetScale, originalScale, timer / halfDuration);
+            timer += Time.deltaTime;
+            yield return null;
+        }
+        if (candy != null && candy.gameObject.activeInHierarchy && !candy.isMoving)
+        {
+            candy.transform.localScale = originalScale;
+        }
+    }
+
+    // THÊM MỚI
+    public void ResetIdleTimerAndStopHints()
+    {
+        _idleTimer = 0f;
+        if (_hintAnimationCoroutine != null)
+        {
+            StopCoroutine(_hintAnimationCoroutine);
+            _hintAnimationCoroutine = null;
+        }
+        StopAndClearActiveHintAnimations();
+    }
+
+    // THÊM MỚI
+    private void StopAndClearActiveHintAnimations()
+    {
+        foreach (var animCoroutine in _activeHintAnimations)
+        {
+            if (animCoroutine != null) StopCoroutine(animCoroutine);
+        }
+        _activeHintAnimations.Clear();
+        if (candyBoard != null)
+        {
+            for (int x = 0; x < boardWidth; x++)
+            {
+                for (int y = 0; y < boardHeight; y++)
+                {
+                    if (candyBoard[x, y]?.candy != null && candyBoard[x, y].isUsable)
+                    {
+                        Candy c = candyBoard[x, y].candy.GetComponent<Candy>();
+                        if (c != null && c.gameObject.activeInHierarchy && c.transform.localScale != c.originalScale)
+                        {
+                            c.transform.localScale = c.originalScale;
+                        }
+                    }
+                }
+            }
+        }
+    }
     public bool CheckBoard()
     {
         if (GameManager.instance.isGameOver) return false;
@@ -555,14 +741,10 @@ public class CandyBoard : MonoBehaviour
         CandyType originalType = primaryCandy.candyType;
         Vector3 specialPosition = new Vector3((specialX - spaceingX) * spacingScale, (specialY - spaceingY) * spacingScale, primaryCandy.transform.position.z);
 
-        // --- LOGIC MỚI: Kiểm tra hình dạng của match ---
-        // Kiểm tra xem tất cả kẹo trong match có nằm trên cùng một hàng ngang không
         bool isStraightHorizontal = matchedCandiesFromOriginalMatch.All(c => c.yIndex == primaryCandy.yIndex);
         // Kiểm tra xem tất cả kẹo trong match có nằm trên cùng một hàng dọc không
         bool isStraightVertical = matchedCandiesFromOriginalMatch.All(c => c.xIndex == primaryCandy.xIndex);
 
-        // -- ĐIỀU KIỆN 1: Tạo Color Bomb (Match-5 thẳng hàng) --
-        // Chỉ tạo bomb nếu match có 5 kẹo trở lên VÀ chúng nằm thẳng hàng (ngang hoặc dọc)
         if (matchedCandiesFromOriginalMatch.Count >= 5 && (isStraightHorizontal || isStraightVertical))
         {
             Debug.Log("Creating Color Bomb due to straight line match-5.");
@@ -578,10 +760,6 @@ public class CandyBoard : MonoBehaviour
             }
             return; // Đã xử lý, thoát khỏi hàm
         }
-
-        // -- ĐIỀU KIỆN 2: Tạo kẹo đặc biệt Row/Column Clearer (Match-4 thẳng hàng) --
-        // Điều kiện này chỉ được xét nếu không thỏa mãn điều kiện tạo Color Bomb
-        // Nó chỉ áp dụng cho match-4 thẳng hàng. Match T hoặc L sẽ không tạo ra kẹo đặc biệt.
         if (matchedCandiesFromOriginalMatch.Count == 4 && (isStraightHorizontal || isStraightVertical))
         {
             SpecialCandyEffect effectToCreate = isStraightHorizontal ? SpecialCandyEffect.ClearRow : SpecialCandyEffect.ClearColumn;
@@ -599,8 +777,6 @@ public class CandyBoard : MonoBehaviour
             }
         }
 
-        // Nếu không thỏa mãn các điều kiện trên (ví dụ: match hình L/T, match-3), sẽ không có kẹo đặc biệt nào được tạo.
-        // Các kẹo trong match sẽ chỉ bị phá hủy bình thường.
     }
 
     private void CollapseColumn(int x)
@@ -791,6 +967,7 @@ public class CandyBoard : MonoBehaviour
         if (firstCandy == null || secondCandy == null) return false;
         return Mathf.Abs(firstCandy.xIndex - secondCandy.xIndex) + Mathf.Abs(firstCandy.yIndex - secondCandy.yIndex) == 1;
     }
+
 }
 
 // Lớp MatchResult và Enum giữ nguyên, không cần thay đổi
