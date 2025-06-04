@@ -27,6 +27,12 @@ public class CandyBoard : MonoBehaviour
 
     [Header("Pooling Settings")]
     public int initialPoolSizePerType = 30;
+    [Header("Hint Settings")]
+    public float hintDelay = 5f; // Thời gian (giây) chờ trước khi hiển thị gợi ý
+    public float hintDisplayDuration = 1.5f; // Thời gian (giây) hiển thị hoạt ảnh gợi ý
+    private List<Candy> _hintCandies = new List<Candy>();
+    private Coroutine _hintAnimationCoroutine;
+    private Coroutine _hintDelayCoroutine; // Coroutine để quản lý độ trễ trước khi hiển thị gợi ý
 
     public void Awake()
     {
@@ -48,19 +54,29 @@ public class CandyBoard : MonoBehaviour
         SetState(new InitializingBoardState(this));
     }
 
-    public void SetState(IBoardState newState)
+    public new void SetState(IBoardState newState) // Thêm 'new' nếu có cảnh báo về việc ẩn thành viên kế thừa
     {
         currentState?.OnExit();
+
+        // Dừng và reset timer gợi ý mỗi khi chuyển state
+        ResetIdleTimer(); // Điều này cũng gọi StopHint()
+
         currentState = newState;
         if (currentState != null)
         {
             currentState.OnEnter();
+            if (currentState is IdleState) // Nếu state mới là Idle, bắt đầu timer
+            {
+                StartIdleTimer();
+            }
         }
         else
         {
             Debug.LogError("SetState called with null newState!");
         }
     }
+
+
 
     private void ValidateSpecialPrefabs()
     {
@@ -79,10 +95,18 @@ public class CandyBoard : MonoBehaviour
         }
     }
 
-    public void Update()
+    public new void Update() // Thêm 'new' nếu có cảnh báo
     {
         if (Input.GetMouseButtonDown(0))
         {
+            // Reset timer gợi ý khi có tương tác chuột
+            // Việc này sẽ được xử lý tốt hơn bởi SetState nếu click dẫn đến thay đổi state.
+            // Tuy nhiên, để chắc chắn, nếu đang ở Idle và có click, ta reset ngay.
+            if (currentState is IdleState)
+            {
+                // ResetIdleTimer(); // Dòng này có thể không cần thiết nếu HandleCandyClick luôn dẫn đến SetState
+            }
+
             Vector2 mousePos = Camera.main.ScreenToWorldPoint(Input.mousePosition);
             RaycastHit2D hit = Physics2D.Raycast(mousePos, Vector2.zero, Mathf.Infinity, LayerMask.GetMask("Candy"));
             if (hit.collider != null)
@@ -90,6 +114,7 @@ public class CandyBoard : MonoBehaviour
                 Candy candy = hit.collider.gameObject.GetComponent<Candy>();
                 if (candy != null && currentState != null)
                 {
+                    // HandleCandyClick trong IdleState sẽ gọi ResetIdleTimer và StopHint
                     currentState.HandleCandyClick(candy);
                 }
             }
@@ -109,6 +134,8 @@ public class CandyBoard : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.M))
         {
             Debug.Log($"Board has possible matches: {CheckForPossibleMatches()}");
+            List<Candy> hint = FindHintMove();
+            if (hint != null) Debug.Log($"Hint found: {hint[0].name} and {hint[1].name}"); else Debug.Log("No hint move found.");
         }
 
         currentState?.UpdateState();
@@ -158,8 +185,9 @@ public class CandyBoard : MonoBehaviour
         FinalizeBoardInitialization();
     }
 
-    private void FinalizeBoardInitialization()
+    private new void FinalizeBoardInitialization() // Thêm 'new' nếu có cảnh báo
     {
+        // ResetIdleTimer() sẽ được gọi trong SetState()
         if (!CheckForPossibleMatches())
         {
             Debug.Log("No possible matches on the board after init/initial processing, re-triggering initialization...");
@@ -168,7 +196,7 @@ public class CandyBoard : MonoBehaviour
         else
         {
             Debug.Log("Board initialization complete with valid moves available.");
-            SetState(new IdleState(this));
+            SetState(new IdleState(this)); // SetState sẽ tự động gọi StartIdleTimer
         }
     }
 
@@ -237,10 +265,14 @@ public class CandyBoard : MonoBehaviour
         }
     }
 
-    public void FinalizeCurrentTurnProcessing()
+    public new void FinalizeCurrentTurnProcessing() // Thêm 'new' nếu có cảnh báo
     {
         Debug.Log("Finalizing current turn processing.");
         DeselectCurrentCandy();
+
+        // ResetIdleTimer() sẽ được gọi trong SetState()
+        // StopHint() cũng sẽ được gọi trong ResetIdleTimer()
+
         if (!CheckForPossibleMatches() && !(currentState is InitializingBoardState))
         {
             Debug.Log("No more possible matches after turn, setting NoPossibleMovesState.");
@@ -249,9 +281,10 @@ public class CandyBoard : MonoBehaviour
         else if (!(currentState is InitializingBoardState))
         {
             Debug.Log("Turn processing complete, moves available, setting IdleState.");
-            SetState(new IdleState(this));
+            SetState(new IdleState(this)); // SetState sẽ tự động gọi StartIdleTimer
         }
     }
+
 
     public IEnumerator HandleNoPossibleMovesCoroutine()
     {
@@ -555,14 +588,10 @@ public class CandyBoard : MonoBehaviour
         CandyType originalType = primaryCandy.candyType;
         Vector3 specialPosition = new Vector3((specialX - spaceingX) * spacingScale, (specialY - spaceingY) * spacingScale, primaryCandy.transform.position.z);
 
-        // --- LOGIC MỚI: Kiểm tra hình dạng của match ---
-        // Kiểm tra xem tất cả kẹo trong match có nằm trên cùng một hàng ngang không
         bool isStraightHorizontal = matchedCandiesFromOriginalMatch.All(c => c.yIndex == primaryCandy.yIndex);
         // Kiểm tra xem tất cả kẹo trong match có nằm trên cùng một hàng dọc không
         bool isStraightVertical = matchedCandiesFromOriginalMatch.All(c => c.xIndex == primaryCandy.xIndex);
 
-        // -- ĐIỀU KIỆN 1: Tạo Color Bomb (Match-5 thẳng hàng) --
-        // Chỉ tạo bomb nếu match có 5 kẹo trở lên VÀ chúng nằm thẳng hàng (ngang hoặc dọc)
         if (matchedCandiesFromOriginalMatch.Count >= 5 && (isStraightHorizontal || isStraightVertical))
         {
             Debug.Log("Creating Color Bomb due to straight line match-5.");
@@ -579,9 +608,6 @@ public class CandyBoard : MonoBehaviour
             return; // Đã xử lý, thoát khỏi hàm
         }
 
-        // -- ĐIỀU KIỆN 2: Tạo kẹo đặc biệt Row/Column Clearer (Match-4 thẳng hàng) --
-        // Điều kiện này chỉ được xét nếu không thỏa mãn điều kiện tạo Color Bomb
-        // Nó chỉ áp dụng cho match-4 thẳng hàng. Match T hoặc L sẽ không tạo ra kẹo đặc biệt.
         if (matchedCandiesFromOriginalMatch.Count == 4 && (isStraightHorizontal || isStraightVertical))
         {
             SpecialCandyEffect effectToCreate = isStraightHorizontal ? SpecialCandyEffect.ClearRow : SpecialCandyEffect.ClearColumn;
@@ -599,8 +625,6 @@ public class CandyBoard : MonoBehaviour
             }
         }
 
-        // Nếu không thỏa mãn các điều kiện trên (ví dụ: match hình L/T, match-3), sẽ không có kẹo đặc biệt nào được tạo.
-        // Các kẹo trong match sẽ chỉ bị phá hủy bình thường.
     }
 
     private void CollapseColumn(int x)
@@ -790,6 +814,225 @@ public class CandyBoard : MonoBehaviour
     {
         if (firstCandy == null || secondCandy == null) return false;
         return Mathf.Abs(firstCandy.xIndex - secondCandy.xIndex) + Mathf.Abs(firstCandy.yIndex - secondCandy.yIndex) == 1;
+    }
+    public void StartIdleTimer()
+    {
+        ResetIdleTimer(); // Đảm bảo timer cũ đã được dừng
+        if (currentState is IdleState) // Chỉ bắt đầu nếu đang ở IdleState
+        {
+            _hintDelayCoroutine = StartCoroutine(HintDelayCoroutine());
+        }
+    }
+
+    // Phương thức để reset (đặt lại) bộ đếm thời gian gợi ý
+    public void ResetIdleTimer()
+    {
+        if (_hintDelayCoroutine != null)
+        {
+            StopCoroutine(_hintDelayCoroutine);
+            _hintDelayCoroutine = null;
+        }
+        StopHint(); // Cũng dừng luôn hoạt ảnh gợi ý nếu có
+    }
+
+    // Coroutine đếm ngược thời gian trước khi hiển thị gợi ý
+    private IEnumerator HintDelayCoroutine()
+    {
+        yield return new WaitForSeconds(hintDelay);
+        // Kiểm tra lại xem có còn ở IdleState không và chưa có gợi ý nào đang chạy
+        if (currentState is IdleState && _hintAnimationCoroutine == null)
+        {
+            List<Candy> possibleMove = FindHintMove();
+            if (possibleMove != null && possibleMove.Count == 2)
+            {
+                ShowHint(possibleMove);
+            }
+            // Nếu không tìm thấy nước đi nào, có thể không làm gì hoặc bắt đầu lại timer
+            // ở đây, chúng ta sẽ để nó tự kết thúc và IdleState sẽ bắt đầu lại nếu cần
+        }
+        _hintDelayCoroutine = null; // Coroutine đã hoàn thành
+    }
+
+    // Phương thức tìm một nước đi gợi ý (trả về 2 kẹo có thể tạo match)
+    // Logic tương tự CheckForPossibleMatches nhưng trả về danh sách kẹo
+    public List<Candy> FindHintMove()
+    {
+        if (GameManager.instance != null && GameManager.instance.isGameOver) return null;
+
+        // Kiểm tra swap ngang
+        for (int y = 0; y < boardHeight; y++)
+        {
+            for (int x = 0; x < boardWidth - 1; x++)
+            {
+                if (candyBoard[x, y].isUsable && candyBoard[x + 1, y].isUsable &&
+                    candyBoard[x, y].candy != null && candyBoard[x + 1, y].candy != null)
+                {
+                    Candy c1Original = candyBoard[x, y].candy.GetComponent<Candy>();
+                    Candy c2Original = candyBoard[x + 1, y].candy.GetComponent<Candy>();
+
+                    // Lưu trữ GameObject để hoán đổi trong candyBoard
+                    GameObject tempCandyGO = candyBoard[x, y].candy;
+                    candyBoard[x, y].candy = candyBoard[x + 1, y].candy;
+                    candyBoard[x + 1, y].candy = tempCandyGO;
+
+                    // Lưu trữ và cập nhật chỉ số tạm thời cho việc kiểm tra
+                    int originalC1X = c1Original.xIndex, originalC1Y = c1Original.yIndex;
+                    int originalC2X = c2Original.xIndex, originalC2Y = c2Original.yIndex;
+                    c1Original.setIndicies(originalC2X, originalC2Y); // c1 đến vị trí của c2
+                    c2Original.setIndicies(originalC1X, originalC1Y); // c2 đến vị trí của c1
+
+
+                    bool matchFound = (IsConnected(c1Original).connectionCandys.Count >= 3) ||
+                                      (IsConnected(c2Original).connectionCandys.Count >= 3);
+
+                    // Hoán đổi lại trạng thái ban đầu trong candyBoard và chỉ số của kẹo
+                    candyBoard[x + 1, y].candy = candyBoard[x, y].candy;
+                    candyBoard[x, y].candy = tempCandyGO;
+                    c1Original.setIndicies(originalC1X, originalC1Y);
+                    c2Original.setIndicies(originalC2X, originalC2Y);
+
+                    if (matchFound)
+                    {
+                        // Trả về 2 kẹo gốc ở vị trí ban đầu của chúng
+                        return new List<Candy> { this.candyBoard[x, y].candy.GetComponent<Candy>(), this.candyBoard[x + 1, y].candy.GetComponent<Candy>() };
+                    }
+                }
+            }
+        }
+
+        // Kiểm tra swap dọc
+        for (int x = 0; x < boardWidth; x++)
+        {
+            for (int y = 0; y < boardHeight - 1; y++)
+            {
+                if (candyBoard[x, y].isUsable && candyBoard[x, y + 1].isUsable &&
+                    candyBoard[x, y].candy != null && candyBoard[x, y + 1].candy != null)
+                {
+                    Candy c1Original = candyBoard[x, y].candy.GetComponent<Candy>();
+                    Candy c2Original = candyBoard[x, y + 1].candy.GetComponent<Candy>();
+
+                    GameObject tempCandyGO = candyBoard[x, y].candy;
+                    candyBoard[x, y].candy = candyBoard[x, y + 1].candy;
+                    candyBoard[x, y + 1].candy = tempCandyGO;
+
+                    int originalC1X = c1Original.xIndex, originalC1Y = c1Original.yIndex;
+                    int originalC2X = c2Original.xIndex, originalC2Y = c2Original.yIndex;
+                    c1Original.setIndicies(originalC2X, originalC2Y);
+                    c2Original.setIndicies(originalC1X, originalC1Y);
+
+                    bool matchFound = (IsConnected(c1Original).connectionCandys.Count >= 3) ||
+                                      (IsConnected(c2Original).connectionCandys.Count >= 3);
+
+                    candyBoard[x, y + 1].candy = candyBoard[x, y].candy;
+                    candyBoard[x, y].candy = tempCandyGO;
+                    c1Original.setIndicies(originalC1X, originalC1Y);
+                    c2Original.setIndicies(originalC2X, originalC2Y);
+
+                    if (matchFound)
+                    {
+                        return new List<Candy> { this.candyBoard[x, y].candy.GetComponent<Candy>(), this.candyBoard[x, y + 1].candy.GetComponent<Candy>() };
+                    }
+                }
+            }
+        }
+        return null; // Không tìm thấy nước đi nào
+    }
+
+    // Phương thức hiển thị gợi ý
+    private void ShowHint(List<Candy> candiesToShow)
+    {
+        if (candiesToShow == null || candiesToShow.Count != 2 || _hintAnimationCoroutine != null) return;
+
+        // Đảm bảo cả hai kẹo đều hợp lệ
+        if (candiesToShow[0] == null || !candiesToShow[0].gameObject.activeSelf ||
+            candiesToShow[1] == null || !candiesToShow[1].gameObject.activeSelf)
+        {
+            Debug.LogWarning("Hint: One or both candies for hint are invalid.");
+            return;
+        }
+
+        _hintCandies = new List<Candy>(candiesToShow);
+        _hintAnimationCoroutine = StartCoroutine(HintAnimationCoroutine(_hintCandies));
+    }
+
+    // Phương thức dừng hoạt ảnh gợi ý
+    public void StopHint()
+    {
+        if (_hintAnimationCoroutine != null)
+        {
+            StopCoroutine(_hintAnimationCoroutine);
+            _hintAnimationCoroutine = null;
+            // Reset lại trạng thái hiển thị của kẹo gợi ý (ví dụ: scale)
+            foreach (Candy c in _hintCandies)
+            {
+                if (c != null && c.gameObject.activeSelf) // Kiểm tra null và active
+                {
+                    c.transform.localScale = Vector3.one; // Giả sử scale mặc định là 1,1,1
+                                                          // Nếu bạn có thay đổi màu sắc hoặc outline, reset ở đây
+                }
+            }
+            _hintCandies.Clear();
+        }
+    }
+
+    // Coroutine thực hiện hoạt ảnh cho kẹo gợi ý
+    private IEnumerator HintAnimationCoroutine(List<Candy> candies)
+    {
+        if (candies == null || candies.Count != 2) yield break;
+        Candy candy1 = candies[0];
+        Candy candy2 = candies[1];
+
+        // Kiểm tra lại trước khi bắt đầu animation
+        if (candy1 == null || !candy1.gameObject.activeSelf || candy2 == null || !candy2.gameObject.activeSelf)
+        {
+            _hintCandies.Clear();
+            _hintAnimationCoroutine = null;
+            yield break;
+        }
+
+        float timer = 0f;
+        Vector3 originalScale1 = candy1.transform.localScale;
+        Vector3 originalScale2 = candy2.transform.localScale;
+        float animationSpeed = 2.5f; // Tốc độ "rung lắc"
+        float scaleAmount = 0.12f;   // Biên độ phóng to/thu nhỏ
+
+        while (timer < hintDisplayDuration)
+        {
+            // Kiểm tra liên tục nếu game over, kẹo bị hủy hoặc di chuyển
+            if ((GameManager.instance != null && GameManager.instance.isGameOver) ||
+                candy1 == null || !candy1.gameObject.activeSelf || candy1.isMoving ||
+                candy2 == null || !candy2.gameObject.activeSelf || candy2.isMoving)
+            {
+                // Nếu có vấn đề, dừng hint và thoát
+                if (candy1 != null && candy1.gameObject.activeSelf) candy1.transform.localScale = originalScale1;
+                if (candy2 != null && candy2.gameObject.activeSelf) candy2.transform.localScale = originalScale2;
+                _hintCandies.Clear();
+                _hintAnimationCoroutine = null;
+                // Quan trọng: Sau khi hint bị ngắt giữa chừng, bắt đầu lại idle timer nếu vẫn ở IdleState
+                if (currentState is IdleState) StartIdleTimer();
+                yield break;
+            }
+
+            float scaleFactor = 1 + (Mathf.Sin(Time.time * Mathf.PI * animationSpeed) * scaleAmount);
+            candy1.transform.localScale = originalScale1 * scaleFactor;
+            candy2.transform.localScale = originalScale2 * scaleFactor;
+
+            timer += Time.deltaTime;
+            yield return null;
+        }
+
+        // Reset scale và dọn dẹp
+        if (candy1 != null && candy1.gameObject.activeSelf) candy1.transform.localScale = originalScale1;
+        if (candy2 != null && candy2.gameObject.activeSelf) candy2.transform.localScale = originalScale2;
+
+        _hintCandies.Clear();
+        _hintAnimationCoroutine = null;
+
+        // Sau khi một gợi ý hoàn thành, bắt đầu lại bộ đếm thời gian cho gợi ý tiếp theo nếu người chơi vẫn không làm gì
+        if (currentState is IdleState)
+        {
+            StartIdleTimer();
+        }
     }
 }
 
