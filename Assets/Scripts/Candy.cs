@@ -164,15 +164,6 @@ public class Candy : MonoBehaviour
             spriteRenderer.color = selected ? new Color(1f, 1f, 1f, 0.7f) : Color.white;
         }
     }
-
-    void OnMouseDown()
-    {
-        if (CandyBoard.instance != null)
-        {
-            CandyBoard.instance.ReportCandyClicked(this);
-        }
-    }
-
     public void ActivateSpecialEffectAndPlayVisuals()
     {
         if (!isSpecial) return;

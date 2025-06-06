@@ -1544,6 +1544,9 @@ GameObject:
   m_Component:
   - component: {fileID: 876688499}
   - component: {fileID: 876688498}
+  - component: {fileID: 876688502}
+  - component: {fileID: 876688501}
+  - component: {fileID: 876688500}
   m_Layer: 0
   m_Name: Candy Board
   m_TagString: Untagged
@@ -1565,9 +1568,17 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   boardWidth: 6
   boardHeight: 8
-  spaceingX: 0
-  spaceingY: 0
-  spacingScale: 1.1
+  arrayLayout:
+    rows:
+    - row: 000000000000
+    - row: 000000000000
+    - row: 000000000000
+    - row: 000000000000
+    - row: 000000000000
+    - row: 000000000000
+    - row: 000000000000
+    - row: 000000000000
+  candyParent: {fileID: 103663256}
   candyPrefabs:
   - {fileID: 3939527605857352177, guid: 38092738483cdeb4c9b5c549d19b6045, type: 3}
   - {fileID: 5522963162319307860, guid: 1a3e3d3b560fa194a9d996aff7587253, type: 3}
@@ -1591,20 +1602,9 @@ MonoBehaviour:
   - {fileID: 2561166017940754981, guid: c3668dcbd892bbc458115959082a8a23, type: 3}
   colorBombPrefab: {fileID: 6964291491685631844, guid: 5f5c5f4d63e94e341ab0efe2f3f7f557,
     type: 3}
-  candyParent: {fileID: 103663256}
-  candyToRemove: []
-  _selectedCandy: {fileID: 0}
-  arrayLayout:
-    rows:
-    - row: 000000000000
-    - row: 000000000000
-    - row: 000000000000
-    - row: 000000000000
-    - row: 000000000000
-    - row: 000000000000
-    - row: 000000000000
-    - row: 000000000000
   initialPoolSizePerType: 5
+  spacingScale: 1.1
+  candyToRemove: []
 --- !u!4 &876688499
 Transform:
   m_ObjectHideFlags: 0
@@ -1620,6 +1620,44 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &876688500
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 876688497}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e7bba042aa4ae1c45b69c3d207d3d81b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+--- !u!114 &876688501
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 876688497}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 67a98cf4433cf624b87116823db70459, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  hintDelay: 5
+  hintDisplayDuration: 1.5
+--- !u!114 &876688502
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 876688497}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ff24bd9449950b14c9af94e6a99d6497, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1 &1078964710
 GameObject:
   m_ObjectHideFlags: 0
