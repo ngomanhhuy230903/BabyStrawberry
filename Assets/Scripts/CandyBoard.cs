@@ -215,6 +215,37 @@ public class CandyBoard : MonoBehaviour
     #endregion
 
     #region Helper Methods
+    // Thêm hàm này vào file CandyBoard.cs
+    public IEnumerator WaitForCandiesToSettle()
+    {
+        // Chờ một frame để các coroutine MoveToCoroutine có thể bắt đầu và set isMoving = true
+        yield return new WaitForEndOfFrame();
+
+        bool allCandiesSettled = false;
+        while (!allCandiesSettled)
+        {
+            allCandiesSettled = true;
+            for (int y = 0; y < boardHeight; y++)
+            {
+                for (int x = 0; x < boardWidth; x++)
+                {
+                    if (candyBoard[x, y].isUsable && candyBoard[x, y].candy != null)
+                    {
+                        if (candyBoard[x, y].candy.GetComponent<Candy>().isMoving)
+                        {
+                            allCandiesSettled = false;
+                            break; // Thoát vòng lặp trong
+                        }
+                    }
+                }
+                if (!allCandiesSettled)
+                {
+                    break; // Thoát vòng lặp ngoài
+                }
+            }
+            yield return null; // Chờ đến frame tiếp theo để kiểm tra lại
+        }
+    }
     public void DoSwap(Candy firstCandy, Candy secondCandy)
     {
         int firstX = firstCandy.xIndex, firstY = firstCandy.yIndex;

@@ -1,80 +1,57 @@
 ﻿using UnityEngine;
-using System; // Cần thiết để sử dụng Action
+using System;
 
 /// <summary>
-/// Component này chịu trách nhiệm duy nhất cho việc lắng nghe input của người chơi.
-/// Nó sử dụng C# events (Observer Pattern) để thông báo cho các hệ thống khác
-/// mà không cần biết chúng là ai.
+/// ĐÃ CẬP NHẬT: Component này bây giờ hoạt động như một "trạm trung chuyển" cho các sự kiện input.
+/// Nó không tự thực hiện raycast nữa, mà nhận báo cáo từ các component khác (như Candy)
+/// và phát đi sự kiện tương ứng.
 /// </summary>
 public class InputController : MonoBehaviour
 {
-    // Sự kiện được phát đi khi một viên kẹo được click hợp lệ.
+    // Thêm một instance Singleton để các viên kẹo có thể dễ dàng truy cập
+    public static InputController instance;
+
+    // Sự kiện vẫn được giữ nguyên. CandyBoard vẫn lắng nghe sự kiện này.
     public event Action<Candy> OnCandyClicked;
-
-    // --- Các sự kiện dành cho việc debug ---
-    public event Action OnResetBoardPressed;    // Phím Space
-    public event Action OnShowStatusPressed;    // Phím S
-    public event Action OnFindHintPressed;      // Phím M
-
-    private Camera _mainCamera;
+    public event Action OnResetBoardPressed;
+    public event Action OnShowStatusPressed;
+    public event Action OnFindHintPressed;
 
     private void Awake()
     {
-        // Cache camera để tối ưu hiệu suất, tránh gọi Camera.main trong Update.
-        _mainCamera = Camera.main;
+        // Khởi tạo Singleton instance
+        if (instance == null)
+        {
+            instance = this;
+        }
+        else
+        {
+            Destroy(gameObject);
+        }
     }
 
+    // Chúng ta không cần hàm Update() để Raycast nữa.
+    // private void Update() { ... } // Có thể xóa hoặc comment khối lệnh Update cũ đi.
+
+    /// <summary>
+    /// Đây là hàm CÔNG KHAI mới mà các viên kẹo sẽ gọi vào.
+    /// Khi nhận được báo cáo, nó sẽ phát đi sự kiện OnCandyClicked.
+    /// </summary>
+    public void ReportCandyClicked(Candy candy)
+    {
+        OnCandyClicked?.Invoke(candy);
+    }
+
+    // Xử lý các phím debug vẫn giữ lại trong Update để tập trung
     private void Update()
     {
-        // Xử lý click chuột/chạm màn hình
-        if (Input.GetMouseButtonDown(0))
-        {
-            HandleTouch();
-        }
-
-        // Xử lý các phím debug
         HandleDebugKeys();
     }
 
-    /// <summary>
-    /// Xử lý việc click chuột hoặc chạm vào màn hình.
-    /// </summary>
-    private void HandleTouch()
-    {
-        // Chuyển đổi vị trí con trỏ trên màn hình thành một tia trong thế giới game.
-        Vector2 mousePos = _mainCamera.ScreenToWorldPoint(Input.mousePosition);
-        RaycastHit2D hit = Physics2D.Raycast(mousePos, Vector2.zero, Mathf.Infinity, LayerMask.GetMask("Candy"));
-
-        if (hit.collider != null)
-        {
-            Candy candy = hit.collider.gameObject.GetComponent<Candy>();
-            if (candy != null)
-            {
-                // Nếu click trúng một viên kẹo, phát ra sự kiện OnCandyClicked.
-                // Dấu '?' đảm bảo code không lỗi nếu không có ai lắng nghe sự kiện này.
-                OnCandyClicked?.Invoke(candy);
-            }
-        }
-    }
-
-    /// <summary>
-    /// Lắng nghe các phím bấm dùng để debug.
-    /// </summary>
     private void HandleDebugKeys()
     {
-        if (Input.GetKeyDown(KeyCode.Space))
-        {
-            OnResetBoardPressed?.Invoke();
-        }
-
-        if (Input.GetKeyDown(KeyCode.S))
-        {
-            OnShowStatusPressed?.Invoke();
-        }
-
-        if (Input.GetKeyDown(KeyCode.M))
-        {
-            OnFindHintPressed?.Invoke();
-        }
+        if (Input.GetKeyDown(KeyCode.Space)) OnResetBoardPressed?.Invoke();
+        if (Input.GetKeyDown(KeyCode.S)) OnShowStatusPressed?.Invoke();
+        if (Input.GetKeyDown(KeyCode.M)) OnFindHintPressed?.Invoke();
     }
 }

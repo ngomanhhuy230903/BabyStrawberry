@@ -30,6 +30,7 @@ public class BoardProcessor : MonoBehaviour
         StartCoroutine(ProcessTurnCoroutine(subtractMoves, initialMatches, swapActivator, swapTarget));
     }
 
+    // Trong file BoardProcessor.cs
     private IEnumerator ProcessTurnCoroutine(bool subtractMoves, List<Candy> initialMatches, Candy swapActivator, Candy swapTarget)
     {
         _isProcessingTurn = true;
@@ -52,14 +53,16 @@ public class BoardProcessor : MonoBehaviour
                 bool shouldSubtract = firstPass && subtractMoves;
                 GameManager.instance?.ProcessTurn(destroyedThisCascade.Count, shouldSubtract);
             }
-
             firstPass = false;
 
-            yield return new WaitForSeconds(0.4f);
+            // Chờ hiệu ứng phá kẹo
+            yield return new WaitForSeconds(0.2f); // Có thể giảm thời gian này một chút
 
+            // Dồn cột và lấp đầy
             CollapseAndRefillAllColumns();
 
-            yield return new WaitForSeconds(0.4f);
+            // THAY ĐỔI Ở ĐÂY: Chờ cho đến khi kẹo rơi xong, thay vì chờ cố định
+            yield return _board.StartCoroutine(_board.WaitForCandiesToSettle());
 
             _candiesToProcess.Clear();
             if (_boardMatcher.FindAllMatches(_board.candyBoard, _candiesToProcess))
@@ -131,6 +134,7 @@ public class BoardProcessor : MonoBehaviour
         _candiesToProcess.Add(otherCandy);
     }
 
+    // Trong file BoardProcessor.cs
     private void CreateSpecialCandyIfMatch(List<Candy> matchedCandies, HashSet<Candy> allCandiesBeingDestroyed, Candy swapActivator)
     {
         if (matchedCandies == null || matchedCandies.Count < 4) return;
@@ -142,10 +146,10 @@ public class BoardProcessor : MonoBehaviour
         }
         else
         {
-            // Tìm một kẹo trong match không phải là kẹo đặc biệt (nếu có)
             primaryCandy = matchedCandies.FirstOrDefault(c => !c.isSpecial) ?? matchedCandies.First();
         }
 
+        // Nếu viên kẹo được chọn để biến hình không nằm trong danh sách sẽ bị phá hủy, thì bỏ qua.
         if (!allCandiesBeingDestroyed.Contains(primaryCandy)) return;
 
         int specialX = primaryCandy.xIndex;
@@ -153,22 +157,41 @@ public class BoardProcessor : MonoBehaviour
         CandyType originalType = primaryCandy.candyType;
         Vector3 specialPosition = new Vector3((specialX - _board.spaceingX) * _board.spacingScale, (specialY - _board.spaceingY) * _board.spacingScale, 0);
 
-        bool isTOrLMatch = !matchedCandies.All(c => c.xIndex == specialX) && !matchedCandies.All(c => c.yIndex == specialY);
+        bool isStraightHorizontal = matchedCandies.All(c => c.yIndex == primaryCandy.yIndex);
+        bool isStraightVertical = matchedCandies.All(c => c.xIndex == primaryCandy.xIndex);
 
-        Candy newSpecialCandy = null;
-        if (matchedCandies.Count >= 5 && !isTOrLMatch)
-        {
-            newSpecialCandy = _candyFactory.CreateSpecialCandy(originalType, SpecialCandyEffect.ClearColor, specialX, specialY, specialPosition);
-        }
-        else if (matchedCandies.Count == 4 && !isTOrLMatch)
-        {
-            SpecialCandyEffect effect = (Random.Range(0, 2) == 0) ? SpecialCandyEffect.ClearRow : SpecialCandyEffect.ClearColumn;
-            newSpecialCandy = _candyFactory.CreateSpecialCandy(originalType, effect, specialX, specialY, specialPosition);
-        }
+        SpecialCandyEffect effectToCreate = SpecialCandyEffect.None;
 
-        if (newSpecialCandy != null)
+        if (matchedCandies.Count >= 5 && (isStraightHorizontal || isStraightVertical))
         {
+            effectToCreate = SpecialCandyEffect.ClearColor;
+        }
+        else if (matchedCandies.Count == 4)
+        {
+            if (isStraightHorizontal) effectToCreate = SpecialCandyEffect.ClearRow;
+            else if (isStraightVertical) effectToCreate = SpecialCandyEffect.ClearColumn;
+            // Có thể thêm logic cho match-4 hình vuông ở đây nếu muốn
+        }
+        // Logic cho match L và T có thể phức tạp hơn, tạm thời bỏ qua
+
+        if (effectToCreate != SpecialCandyEffect.None)
+        {
+            // BƯỚC SỬA LỖI QUAN TRỌNG
+            // 1. Lấy tham chiếu đến GameObject cũ tại vị trí sẽ tạo kẹo mới
+            GameObject oldCandyObject = _board.candyBoard[specialX, specialY].candy;
+            if (oldCandyObject != null)
+            {
+                // 2. Trả nó về pool ngay lập tức để nó biến mất
+                _candyFactory.ReturnCandyToPool(oldCandyObject.GetComponent<Candy>());
+            }
+
+            // 3. Tạo kẹo đặc biệt mới
+            Candy newSpecialCandy = _candyFactory.CreateSpecialCandy(originalType, effectToCreate, specialX, specialY, specialPosition);
+
+            // 4. Đặt kẹo mới vào lưới logic
             _board.candyBoard[specialX, specialY].candy = newSpecialCandy.gameObject;
+
+            // 5. Ra lệnh không phá hủy viên kẹo gốc (vì nó đã được thay thế)
             allCandiesBeingDestroyed.Remove(primaryCandy);
         }
     }

@@ -156,7 +156,14 @@ public class Candy : MonoBehaviour
         transform.position = targetPosition;
         isMoving = false;
     }
-
+    void OnMouseDown()
+    {
+        // Thay vì báo cáo cho CandyBoard, viên kẹo sẽ báo cáo cho InputController
+        if (InputController.instance != null)
+        {
+            InputController.instance.ReportCandyClicked(this);
+        }
+    }
     public void SetSelected(bool selected)
     {
         if (spriteRenderer != null)
